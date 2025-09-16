@@ -1,24 +1,40 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { PaperProvider } from 'react-native-paper';
+import { useColorScheme } from 'react-native';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AuthProvider } from '../src/contexts/AuthContext';
+import { ChatProvider } from '../src/contexts/ChatContext';
+import { NotificationProvider } from '../src/contexts/NotificationContext';
+import { lightTheme, darkTheme } from '../src/theme';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  initialRouteName: 'index',
 };
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <PaperProvider theme={isDark ? darkTheme : lightTheme}>
+      <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+        <AuthProvider>
+          <ChatProvider>
+            <NotificationProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="onboarding" />
+              </Stack>
+              <StatusBar style={isDark ? 'light' : 'dark'} />
+            </NotificationProvider>
+          </ChatProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </PaperProvider>
   );
 }

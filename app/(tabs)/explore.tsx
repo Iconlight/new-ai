@@ -1,112 +1,292 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { Text, Card, useTheme, Button } from 'react-native-paper';
+import { router } from 'expo-router';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { useChat } from '../../src/contexts/ChatContext';
+import { getTodaysProactiveTopics, generateAndScheduleProactiveConversations, markProactiveTopicAsSent } from '../../src/services/proactiveAI';
+import { generateProactiveConversationStarters } from '../../src/services/ai';
+import { ProactiveTopic } from '../../src/types';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+export default function ExploreScreen() {
+  const theme = useTheme();
+  const { user } = useAuth();
+  const [todaysTopics, setTodaysTopics] = useState<ProactiveTopic[]>([]);
+  const [forYouTopics, setForYouTopics] = useState<ProactiveTopic[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [startingTopicId, setStartingTopicId] = useState<string | null>(null);
+  const { startChatWithAI } = useChat();
+  const [activeTab, setActiveTab] = useState<'foryou' | 'interests'>('interests');
 
-export default function TabTwoScreen() {
+  useEffect(() => {
+    if (!user) return;
+    if (activeTab === 'interests') {
+      loadTodaysTopics();
+    } else {
+      loadForYouTopics();
+    }
+  }, [user, activeTab]);
+
+  const loadTodaysTopics = async () => {
+    if (!user) return;
+    
+    try {
+      const topics = await getTodaysProactiveTopics(user.id);
+      setTodaysTopics(topics);
+    } catch (error) {
+      console.error('Error loading topics:', error);
+    }
+  };
+
+  const loadForYouTopics = async () => {
+    if (!user) return;
+    try {
+      const date = new Date().toLocaleDateString();
+      const starters = await generateProactiveConversationStarters([], date);
+      const nowIso = new Date().toISOString();
+      const mapped: ProactiveTopic[] = starters.slice(0, 3).map((s, i) => ({
+        id: `local-${Date.now()}-${i}`,
+        user_id: user.id,
+        topic: `For You ${i + 1}`,
+        message: s,
+        interests: [],
+        is_sent: false,
+        scheduled_for: nowIso,
+        created_at: nowIso,
+      } as ProactiveTopic));
+      setForYouTopics(mapped);
+    } catch (e) {
+      console.error('Error loading for-you topics:', e);
+      setForYouTopics([]);
+    }
+  };
+
+  const formatTopicMessage = (raw: string): string => {
+    if (!raw) return '';
+    let s = raw.trim();
+    // Strip code fences
+    const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) s = fence[1].trim();
+    // Try JSON array
+    try {
+      if (s.startsWith('[')) {
+        const arr = JSON.parse(s);
+        if (Array.isArray(arr) && arr.length) {
+          const first = typeof arr[0] === 'string' ? arr[0] : arr[0]?.text;
+          if (first) return String(first).trim();
+        }
+      }
+    } catch {}
+    // Remove leading/trailing brackets/quotes leftovers
+    s = s.replace(/^\[+\s*/, '').replace(/\s*\]+$/, '');
+    s = s.replace(/^"+\s*/, '').replace(/\s*"+$/, '');
+    // If multiple lines or bullets, take first non-empty line
+    const firstLine = s.split('\n').map(l => l.trim()).find(Boolean);
+    return firstLine || 'Tap to start this conversation';
+  };
+
+  const handleStartTopic = async (topic: ProactiveTopic) => {
+    if (!user || startingTopicId) return;
+    try {
+      setStartingTopicId(topic.id);
+      // Start a new chat where AI opens with the topic message
+      const newChat = await startChatWithAI(topic.message, topic.topic);
+      if (newChat) {
+        // Mark this proactive topic as sent only if it exists in DB
+        if (!String(topic.id).startsWith('local-')) {
+          try { await markProactiveTopicAsSent(topic.id); } catch {}
+        }
+        // Navigate to the chat screen
+        router.push({ pathname: '/(tabs)/chat/[id]', params: { id: newChat.id } });
+      }
+    } catch (e) {
+      console.error('Failed to start chat from topic:', e);
+    } finally {
+      setStartingTopicId(null);
+    }
+  };
+
+  const handleGenerateTopics = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      if (activeTab === 'interests') {
+        await generateAndScheduleProactiveConversations(user.id);
+        await loadTodaysTopics();
+      } else {
+        await loadForYouTopics();
+      }
+    } catch (error) {
+      console.error('Error generating topics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.header}>
+        <Text variant="headlineMedium" style={styles.title}>
+          Today's Conversations
+        </Text>
+        <Text variant="bodyLarge" style={styles.subtitle}>Discover personalized topics</Text>
+        <View style={styles.tabRow}>
+          <Button
+            mode={activeTab === 'foryou' ? 'contained' : 'outlined'}
+            style={[styles.tabButton, activeTab === 'foryou' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('foryou')}
+          >
+            For You
+          </Button>
+          <Button
+            mode={activeTab === 'interests' ? 'contained' : 'outlined'}
+            style={[styles.tabButton, activeTab === 'interests' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('interests')}
+          >
+            Interests
+          </Button>
+        </View>
+      </View>
+
+      <View style={styles.content}>
+        <Button
+          mode="outlined"
+          onPress={handleGenerateTopics}
+          loading={loading}
+          disabled={loading}
+          style={styles.generateButton}
+          icon="refresh"
+        >
+          Refresh
+        </Button>
+
+        {(activeTab === 'interests' ? todaysTopics : forYouTopics).length > 0 ? (
+          (activeTab === 'interests' ? todaysTopics : forYouTopics).map((topic) => (
+            <Card
+              key={topic.id}
+              style={styles.topicCard}
+              onPress={() => handleStartTopic(topic)}
+              disabled={startingTopicId === topic.id}
+            >
+              <Card.Content>
+                <Text variant="titleMedium" style={styles.topicTitle}>
+                  {topic.topic}
+                </Text>
+                <Text variant="bodyLarge" style={styles.topicMessage}>
+                  {formatTopicMessage(topic.message)}
+                </Text>
+                <View style={styles.topicMeta}>
+                  <Text variant="bodySmall" style={styles.metaText}>
+                    Scheduled: {new Date(topic.scheduled_for).toLocaleTimeString()}
+                  </Text>
+                  {topic.is_sent && (
+                    <Text variant="bodySmall" style={[styles.metaText, { color: theme.colors.primary }]}> 
+                      ✓ Sent
+                    </Text>
+                  )}
+                </View>
+                {topic.interests.length > 0 && (
+                  <View style={styles.interestsContainer}>
+                    <Text variant="bodySmall" style={styles.interestsLabel}>
+                      Based on: {topic.interests.slice(0, 3).join(', ')}
+                      {topic.interests.length > 3 && ` +${topic.interests.length - 3} more`}
+                    </Text>
+                  </View>
+                )}
+              </Card.Content>
+            </Card>
+          ))
+        ) : (
+          <Card style={styles.emptyCard}>
+            <Card.Content style={styles.emptyContent}>
+              <Text variant="headlineSmall" style={styles.emptyTitle}>
+                No topics for today
+              </Text>
+              <Text variant="bodyLarge" style={styles.emptySubtitle}>
+                Generate your first set of conversation starters
+              </Text>
+            </Card.Content>
+          </Card>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
   },
-  titleContainer: {
+  header: {
+    padding: 20,
+    paddingTop: 60,
+  },
+  title: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  subtitle: {
+    opacity: 0.7,
+  },
+  content: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  generateButton: {
+    marginBottom: 16,
+  },
+  tabRow: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 12,
+  },
+  tabButton: {
+    flex: 1,
+  },
+  tabButtonActive: {
+    // additional emphasis if desired
+  },
+  topicCard: {
+    marginBottom: 12,
+  },
+  topicTitle: {
+    marginBottom: 8,
+    fontWeight: 'bold',
+  },
+  topicMessage: {
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  topicMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  metaText: {
+    opacity: 0.7,
+  },
+  interestsContainer: {
+    marginTop: 4,
+  },
+  interestsLabel: {
+    opacity: 0.6,
+    fontStyle: 'italic',
+  },
+  emptyCard: {
+    marginTop: 40,
+  },
+  emptyContent: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyTitle: {
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    textAlign: 'center',
+    opacity: 0.7,
   },
 });

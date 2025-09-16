@@ -1,98 +1,146 @@
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, FlatList } from 'react-native';
+import { FAB, Text, Card, IconButton, useTheme } from 'react-native-paper';
+import { router } from 'expo-router';
+import { useChat } from '../../src/contexts/ChatContext';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { Chat } from '../../src/types';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function ChatsScreen() {
+  const theme = useTheme();
+  const { user } = useAuth();
+  const { chats, createNewChat, deleteChat, refreshChats } = useChat();
 
-export default function HomeScreen() {
+  useEffect(() => {
+    if (user) {
+      refreshChats();
+    }
+  }, [user]);
+
+  const handleCreateChat = async () => {
+    const newChat = await createNewChat();
+    if (newChat) {
+      router.push(`/(tabs)/chat/${newChat.id}`);
+    }
+  };
+
+  const handleChatPress = (chatId: string) => {
+    router.push(`/(tabs)/chat/${chatId}`);
+  };
+
+  const handleDeleteChat = async (chatId: string) => {
+    await deleteChat(chatId);
+  };
+
+  const renderChatItem = ({ item }: { item: Chat }) => (
+    <Card style={styles.chatCard} onPress={() => handleChatPress(item.id)}>
+      <Card.Content style={styles.chatContent}>
+        <View style={styles.chatHeader}>
+          <Text variant="titleMedium" numberOfLines={1} style={styles.chatTitle}>
+            {item.title}
+          </Text>
+          <IconButton
+            icon="delete"
+            size={20}
+            onPress={() => handleDeleteChat(item.id)}
+          />
+        </View>
+        <Text variant="bodySmall" style={styles.chatDate}>
+          {new Date(item.updated_at).toLocaleDateString()}
+        </Text>
+      </Card.Content>
+    </Card>
+  );
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.header}>
+        <Text variant="headlineMedium" style={styles.title}>
+          Your Conversations
+        </Text>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {chats.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text variant="headlineSmall" style={styles.emptyTitle}>
+            No conversations yet
+          </Text>
+          <Text variant="bodyLarge" style={styles.emptySubtitle}>
+            Start your first conversation with AI
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={chats}
+          renderItem={renderChatItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.chatsList}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      <FAB
+        icon="plus"
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+        onPress={handleCreateChat}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+  },
+  header: {
+    padding: 20,
+    paddingTop: 60,
+  },
+  title: {
+    fontWeight: 'bold',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    padding: 40,
   },
-  stepContainer: {
-    gap: 8,
+  emptyTitle: {
     marginBottom: 8,
+    textAlign: 'center',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  emptySubtitle: {
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  chatsList: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  chatCard: {
+    marginBottom: 12,
+  },
+  chatContent: {
+    paddingVertical: 12,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  chatTitle: {
+    flex: 1,
+    marginRight: 8,
+  },
+  chatDate: {
+    marginTop: 4,
+    opacity: 0.7,
+  },
+  fab: {
     position: 'absolute',
+    margin: 16,
+    right: 0,
+    bottom: 0,
   },
 });
