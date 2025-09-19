@@ -12,6 +12,11 @@ export default function ChatsScreen() {
   const { user } = useAuth();
   const { chats, createNewChat, deleteChat, refreshChats } = useChat();
 
+  // Redirect to discover page since we're using top navigation layout
+  useEffect(() => {
+    router.replace('/discover');
+  }, []);
+
   useEffect(() => {
     if (user) {
       refreshChats();

@@ -1,6 +1,13 @@
-import OpenAI from 'openai';
 import Constants from 'expo-constants';
 import { getTrendingTopics } from './trending';
+
+// Dynamically import OpenAI to avoid initialization issues
+let OpenAI: any = null;
+try {
+  OpenAI = require('openai').default || require('openai');
+} catch (error) {
+  console.error('Failed to import OpenAI:', error);
+}
 
 // OpenRouter API configuration (supports many providers including DeepSeek)
 const openRouterApiKey =
@@ -13,17 +20,24 @@ if (!openRouterApiKey) {
 }
 
 // Initialize OpenAI-compatible client with OpenRouter endpoint
-const openrouter = new OpenAI({
-  apiKey: openRouterApiKey,
-  baseURL: 'https://openrouter.ai/api/v1',
-  // Required for usage in React Native / Expo environments
-  dangerouslyAllowBrowser: true,
-  // Optional headers recommended by OpenRouter for analytics
-  defaultHeaders: {
-    'HTTP-Referer': 'proactiveai://app',
-    'X-Title': 'ProactiveAI',
-  },
-});
+let openrouter: any = null;
+if (OpenAI) {
+  try {
+    openrouter = new OpenAI({
+      apiKey: openRouterApiKey,
+      baseURL: 'https://openrouter.ai/api/v1',
+      // Required for usage in React Native / Expo environments
+      dangerouslyAllowBrowser: true,
+      // Optional headers recommended by OpenRouter for analytics
+      defaultHeaders: {
+        'HTTP-Referer': 'proactiveai://app',
+        'X-Title': 'ProactiveAI',
+      },
+    });
+  } catch (error) {
+    console.error('Failed to initialize OpenAI client:', error);
+  }
+}
 
 export interface AIResponse {
   content: string;
@@ -34,6 +48,13 @@ export const generateAIResponse = async (
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   userInterests: string[] = []
 ): Promise<AIResponse> => {
+  if (!openrouter) {
+    return {
+      content: 'AI service is not available right now. Please try again later.',
+      error: 'OpenAI client not initialized',
+    };
+  }
+
   try {
     const systemPrompt = `You are a proactive AI assistant that engages users in meaningful conversations based on their interests: ${userInterests.join(', ')}. 
     Be conversational, engaging, and helpful. Ask follow-up questions to keep the conversation flowing. 
@@ -64,6 +85,10 @@ export const generateAIResponse = async (
 export const generateChatTitle = async (
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
 ): Promise<string> => {
+  if (!openrouter) {
+    return 'New Conversation';
+  }
+
   try {
     const system = `You are an assistant that generates a concise, descriptive chat title based on the conversation. 
 Return only the title text, no quotes, no punctuation at the end. Keep it under 40 characters.`;
@@ -92,18 +117,57 @@ export const generateProactiveConversationStarters = async (
   userInterests: string[],
   currentDate: string
 ): Promise<string[]> => {
+  if (!openrouter) {
+    return [
+      "What's something new you've learned recently that excited you?",
+      "If you could have a conversation with anyone from history, who would it be and why?",
+      "What's a small change you've made recently that had a big impact on your day?"
+    ];
+  }
   // Fetch trending topics to ground the suggestions in today's news/social media
   let trendingList: string[] = [];
   try {
+    console.log('🔄 Getting trending topics for AI generation...');
     trendingList = await getTrendingTopics();
-  } catch {
+    console.log(`📊 Got ${trendingList.length} trending topics for AI`);
+  } catch (e) {
+    console.error('⚠️ Failed to get trending topics:', e);
     trendingList = [];
+  }
+
+  // Fallback: ask the model for today's trending headlines if web sources failed
+  if (trendingList.length === 0) {
+    try {
+      const fallbackPrompt = `List 10 of the most discussed trending headlines/topics from the internet and social media today (${currentDate}).
+Return ONLY a JSON array of short headline strings.`;
+      const comp = await openrouter.chat.completions.create({
+        model: 'deepseek/deepseek-chat',
+        messages: [{ role: 'user', content: fallbackPrompt }],
+        max_tokens: 200,
+        temperature: 0.3,
+      });
+      const raw = comp.choices[0]?.message?.content || '';
+      try {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          trendingList = arr.filter((x) => typeof x === 'string').map((s) => s.trim()).filter(Boolean);
+        }
+      } catch {
+        // naive line split fallback
+        trendingList = raw.split('\n').map((l: string) => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean).slice(0, 10);
+      }
+    } catch {
+      // ignore
+    }
   }
 
   const trendingSummary = trendingList
     .slice(0, 10)
     .map((t, i) => `- ${t}`)
     .join('\n');
+    
+  console.log('🎯 User interests:', userInterests);
+  console.log('📰 Trending summary length:', trendingSummary.length);
 
   const extractStartersFromResponse = (raw: string): string[] => {
     if (!raw) return [];
@@ -156,24 +220,27 @@ export const generateProactiveConversationStarters = async (
     // 4) Last resort: split lines
     return attempt
       .split('\n')
-      .map((l) => l.trim())
+      .map((l: string) => l.trim())
       .filter(Boolean);
   };
   try {
     const mode = userInterests && userInterests.length > 0 ? 'interests' : 'foryou';
     const baseInstructions = `Generate 3 engaging conversation starters for today (${currentDate}).
 Ground them in CURRENT trending topics from the internet and social media (see list below), and keep them timely.
-${mode === 'interests' ? `Also personalize to these user interests: ${userInterests.join(', ')}.` : 'Do not assume any user-specific interests.'}
-Each starter should be 1–2 sentences, spark discussion, and reference or relate to what's trending where relevant.
-Format the final result strictly as a JSON array of strings.`;
+${mode === 'interests' ? `Also personalize to these user interests: ${userInterests.join(', ')}. Each starter must explicitly mention at least one of the user's interests by name.` : 'Do not assume any user-specific interests.'}
+Each starter must explicitly mention at least one of the trending items by name from the list below (no placeholders), be 1–2 sentences, and spark discussion.
+Return ONLY a JSON array of strings.`;
 
     const prompt = `${baseInstructions}\n\nTrending highlights:\n${trendingSummary || '- (no trending available, still generate timely, general topics)'}\n`;
+    
+    console.log('🤖 Sending prompt to AI (length:', prompt.length, ')');
+    console.log('🔑 Using API key ending in:', openRouterApiKey?.slice(-6) || 'NONE');
 
     const completion = await openrouter.chat.completions.create({
       model: 'deepseek/deepseek-chat',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 300,
-      temperature: 0.8,
+      temperature: 0.5,
     });
 
     const response = completion.choices[0]?.message?.content || '';
@@ -186,7 +253,10 @@ Format the final result strictly as a JSON array of strings.`;
       "What's a small change you've made recently that had a big impact on your day?"
     ];
   } catch (error) {
-    console.error('Proactive Generation Error:', error);
+    console.error('❌ Proactive Generation Error:', error);
+    if (error instanceof Error && error.message.includes('401')) {
+      console.error('🔐 API Key issue detected. Check EXPO_PUBLIC_OPENROUTER_API_KEY');
+    }
     return [
       "What's something new you've learned recently that excited you?",
       "If you could have a conversation with anyone from history, who would it be and why?",

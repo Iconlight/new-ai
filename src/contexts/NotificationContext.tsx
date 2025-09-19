@@ -1,13 +1,23 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 import { supabase } from '../services/supabase';
 import { generateAndScheduleProactiveConversations } from '../services/proactiveAI';
-import { registerForPushNotificationsAsync } from '../services/notifications';
 import { useAuth } from './AuthContext';
+
+// Safely import expo-notifications with fallback
+let Notifications: any = null;
+let registerForPushNotificationsAsync: any = null;
+
+try {
+  Notifications = require('expo-notifications');
+  registerForPushNotificationsAsync = require('../services/notifications').registerForPushNotificationsAsync;
+} catch (error) {
+  console.warn('Notifications not available in this environment:', error);
+}
 
 interface NotificationContextType {
   expoPushToken: string | null;
-  notification: Notifications.Notification | null;
+  notification: any | null;
   generateDailyConversations: () => Promise<void>;
 }
 
@@ -24,9 +34,15 @@ export const useNotification = () => {
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
-  const [notification, setNotification] = useState<Notifications.Notification | null>(null);
+  const [notification, setNotification] = useState<any | null>(null);
 
   useEffect(() => {
+    // Skip notifications in Expo Go or if not available
+    if (!Notifications || !registerForPushNotificationsAsync) {
+      console.log('Notifications not available - skipping initialization');
+      return;
+    }
+
     const initializeNotifications = async () => {
       try {
         const token = await registerForPushNotificationsAsync();
@@ -45,12 +61,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     let responseListener: any;
 
     try {
-      notificationListener = Notifications.addNotificationReceivedListener(notification => {
+      notificationListener = Notifications.addNotificationReceivedListener((notification: any) => {
         console.log('Notification received:', notification);
         setNotification(notification);
       });
 
-      responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+      responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
         console.log('Notification response:', response);
         // Handle notification tap - could navigate to chat or create new conversation
       });

@@ -20,55 +20,35 @@ export default function TabLayout() {
     return null;
   }
 
+  // Still provide the tabs layout for chat routes, but hide the tab bar
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.outline,
-          ...Platform.select({
-            ios: {
-              position: 'absolute',
-            },
-            default: {},
-          }),
-        },
+        tabBarStyle: { display: 'none' }, // Hide tab bar since we use top navigation
       }}>
       <Tabs.Screen
         name="index"
-        options={{
-          title: 'Chats',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles" size={size} color={color} />
-          ),
+        options={{ 
+          href: null, // Hide from navigation
+          // Redirect to discover when this route is accessed
         }}
       />
       <Tabs.Screen
         name="chat/[id]"
         options={{
-          href: null, // Hide from tab bar
+          title: 'Chat',
         }}
       />
       <Tabs.Screen
         name="explore"
-        options={{
-          title: 'Discover',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="compass" size={size} color={color} />
-          ),
-        }}
+        options={{ href: null }} // Hide from navigation
       />
       <Tabs.Screen
         name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
-          ),
-        }}
+        options={{ href: null }} // Hide from navigation
       />
     </Tabs>
   );
