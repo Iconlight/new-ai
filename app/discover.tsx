@@ -148,6 +148,10 @@ export default function DiscoverScreen() {
         />
         <Appbar.Content title="ProactiveAI" />
         <Appbar.Action 
+          icon="account-group" 
+          onPress={() => router.push('/networking')} 
+        />
+        <Appbar.Action 
           icon="account" 
           onPress={() => router.push('/profile')} 
         />
@@ -240,8 +244,22 @@ export default function DiscoverScreen() {
         }
       ]}>
         <View style={styles.drawerHeader}>
-          <Text variant="titleLarge" style={styles.drawerTitle}>Chats</Text>
+          <Text variant="titleLarge" style={styles.drawerTitle}>Menu</Text>
           <IconButton icon="close" onPress={() => setDrawerOpen(false)} />
+        </View>
+        
+        {/* Networking Section */}
+        <Drawer.Item
+          label="🤝 AI Networking"
+          onPress={() => {
+            setDrawerOpen(false);
+            router.push('/networking');
+          }}
+          style={styles.chatItem}
+        />
+        
+        <View style={[styles.drawerHeader, { paddingTop: 16 }]}>
+          <Text variant="titleMedium" style={styles.drawerTitle}>Recent Chats</Text>
         </View>
         <ScrollView style={styles.chatList}>
           {chats.map((chat) => (

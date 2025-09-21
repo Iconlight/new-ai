@@ -48,10 +48,43 @@ export interface ProactiveTopic {
   topic: string;
   message: string;
   interests: string[];
-  is_sent: boolean;
   scheduled_for: string;
-  sent_at?: string;
+  is_sent: boolean;
   created_at: string;
+  sent_at?: string;
+}
+
+export interface NetworkingMatch {
+  id: string;
+  userId1: string;
+  userId2: string;
+  compatibilityScore: number;
+  sharedInterests: string[];
+  matchReason: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  createdAt: Date;
+  expiresAt: Date;
+  otherUser?: {
+    id: string;
+    name: string;
+    avatar?: string;
+    interests: string[];
+    communicationStyle: string;
+  };
+}
+
+export interface ConversationPattern {
+  userId: string;
+  communicationStyle: 'analytical' | 'creative' | 'empathetic' | 'direct' | 'philosophical';
+  curiosityLevel: number;
+  topicDepth: number;
+  questionAsking: number;
+  responseLength: 'concise' | 'moderate' | 'detailed';
+  interests: string[];
+  conversationTopics: string[];
+  intellectualCuriosity: number;
+  emotionalIntelligence: number;
+  lastAnalyzed: Date;
 }
 
 export interface GiftedChatMessage {
