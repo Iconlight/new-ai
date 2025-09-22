@@ -11,8 +11,10 @@ import {
   declineMatch,
   enableNetworking 
 } from '../src/services/networking';
+import { supabase } from '../src/services/supabase';
+import { ErrorBoundary, NetworkingErrorFallback } from '../src/components/ErrorBoundary';
 
-export default function NetworkingScreen() {
+function NetworkingScreenContent() {
   const theme = useTheme();
   const { user } = useAuth();
   const [matches, setMatches] = useState<NetworkingMatch[]>([]);
@@ -26,6 +28,23 @@ export default function NetworkingScreen() {
     }
   }, [user]);
 
+  const checkNetworkingStatus = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: preferences } = await supabase
+        .from('user_networking_preferences')
+        .select('is_networking_enabled')
+        .eq('user_id', user.id)
+        .single();
+      
+      setNetworkingEnabled(preferences?.is_networking_enabled || false);
+    } catch (error) {
+      console.error('Error checking networking status:', error);
+      setNetworkingEnabled(false);
+    }
+  };
+
   const loadMatches = async () => {
     if (!user) return;
     
@@ -33,7 +52,9 @@ export default function NetworkingScreen() {
     try {
       const userMatches = await getUserMatches(user.id);
       setMatches(userMatches);
-      setNetworkingEnabled(userMatches.length > 0 || networkingEnabled);
+      
+      // Check if networking is enabled by looking for preferences in database
+      await checkNetworkingStatus();
     } catch (error) {
       console.error('Error loading matches:', error);
     } finally {
@@ -58,10 +79,24 @@ export default function NetworkingScreen() {
         {
           text: 'Enable',
           onPress: async () => {
-            const success = await enableNetworking(user.id);
-            if (success) {
-              setNetworkingEnabled(true);
-              await loadMatches();
+            try {
+              const success = await enableNetworking(user.id);
+              if (success) {
+                await checkNetworkingStatus(); // This will set networkingEnabled to true
+                await loadMatches();
+              } else {
+                console.warn('[Networking] enableNetworking() returned false. Likely RLS or missing tables.');
+                Alert.alert(
+                  'Could not enable networking',
+                  'Please ensure you are signed in and that the networking tables are created in Supabase (run add_networking_tables.sql).'
+                );
+              }
+            } catch (e: any) {
+              console.error('[Networking] Failed to enable networking:', e?.message || e);
+              Alert.alert(
+                'Error enabling networking',
+                'An unexpected error occurred. Check your internet connection and Supabase configuration, then try again.'
+              );
             }
           }
         }
@@ -318,6 +353,14 @@ export default function NetworkingScreen() {
         style={styles.fab}
       />
     </View>
+  );
+}
+
+export default function NetworkingScreen() {
+  return (
+    <ErrorBoundary fallback={NetworkingErrorFallback}>
+      <NetworkingScreenContent />
+    </ErrorBoundary>
   );
 }
 

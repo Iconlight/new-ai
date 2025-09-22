@@ -117,6 +117,8 @@ Base your analysis on:
         intellectual_curiosity: mockPattern.intellectualCuriosity,
         emotional_intelligence: mockPattern.emotionalIntelligence,
         last_analyzed: mockPattern.lastAnalyzed.toISOString()
+      }, {
+        onConflict: 'user_id'
       });
 
     return mockPattern;

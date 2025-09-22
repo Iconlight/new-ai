@@ -50,7 +50,11 @@ export const enableNetworking = async (
 ): Promise<boolean> => {
   try {
     // First, analyze the user's conversation patterns
-    await analyzeConversationPattern(userId);
+    try {
+      await analyzeConversationPattern(userId);
+    } catch (e: any) {
+      console.warn('[Networking] analyzeConversationPattern threw:', e?.message || e);
+    }
 
     // Set networking preferences
     const { error } = await supabase
@@ -62,9 +66,20 @@ export const enableNetworking = async (
         max_matches_per_day: preferences.maxMatchesPerDay || 5,
         preferred_communication_styles: preferences.preferredCommunicationStyles || [],
         minimum_compatibility_score: preferences.minimumCompatibilityScore || 60
+      }, {
+        onConflict: 'user_id'
       });
 
-    return !error;
+    if (error) {
+      console.error('[Networking] Upsert user_networking_preferences failed:', {
+        message: error.message,
+        details: (error as any).details,
+        hint: (error as any).hint,
+        code: (error as any).code,
+      });
+      return false;
+    }
+    return true;
   } catch (error) {
     console.error('Error enabling networking:', error);
     return false;

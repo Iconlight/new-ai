@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Switch, Card, Button, Appbar, useTheme, Chip } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { Text, Switch, Card, Button, Appbar, useTheme, Chip, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { updateNetworkingPreferences } from '../../src/services/networking';
+import { supabase } from '../../src/services/supabase';
 
 export default function NetworkingSettingsScreen() {
   const theme = useTheme();
@@ -11,11 +13,63 @@ export default function NetworkingSettingsScreen() {
   const [visibilityLevel, setVisibilityLevel] = useState<'public' | 'limited' | 'private'>('limited');
   const [maxMatchesPerDay, setMaxMatchesPerDay] = useState(5);
   const [minimumCompatibility, setMinimumCompatibility] = useState(60);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      loadSettings();
+    }
+  }, [user]);
+
+  const loadSettings = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      const { data: preferences } = await supabase
+        .from('user_networking_preferences')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (preferences) {
+        setNetworkingEnabled(preferences.is_networking_enabled);
+        setVisibilityLevel(preferences.visibility_level);
+        setMaxMatchesPerDay(preferences.max_matches_per_day);
+        setMinimumCompatibility(preferences.minimum_compatibility_score);
+      }
+    } catch (error) {
+      console.error('Error loading networking settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSaveSettings = async () => {
-    // Here you would call updateNetworkingPreferences
-    console.log('Saving networking settings...');
-    router.back();
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      const success = await updateNetworkingPreferences(user.id, {
+        isNetworkingEnabled: networkingEnabled,
+        visibilityLevel,
+        maxMatchesPerDay,
+        minimumCompatibilityScore: minimumCompatibility
+      });
+      
+      if (success) {
+        Alert.alert('Success', 'Settings saved successfully!');
+        router.back();
+      } else {
+        Alert.alert('Error', 'Failed to save settings. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      Alert.alert('Error', 'An unexpected error occurred.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -94,6 +148,19 @@ export default function NetworkingSettingsScreen() {
                 </Text>
               </View>
             </View>
+            
+            <View style={styles.segmentedContainer}>
+              <SegmentedButtons
+                value={maxMatchesPerDay.toString()}
+                onValueChange={(value) => setMaxMatchesPerDay(parseInt(value))}
+                buttons={[
+                  { value: '1', label: '1' },
+                  { value: '3', label: '3' },
+                  { value: '5', label: '5' },
+                  { value: '10', label: '10' },
+                ]}
+              />
+            </View>
 
             <View style={styles.settingRow}>
               <View style={styles.settingInfo}>
@@ -102,6 +169,19 @@ export default function NetworkingSettingsScreen() {
                   Only show matches above {minimumCompatibility}% compatibility
                 </Text>
               </View>
+            </View>
+            
+            <View style={styles.segmentedContainer}>
+              <SegmentedButtons
+                value={minimumCompatibility.toString()}
+                onValueChange={(value) => setMinimumCompatibility(parseInt(value))}
+                buttons={[
+                  { value: '50', label: '50%' },
+                  { value: '60', label: '60%' },
+                  { value: '70', label: '70%' },
+                  { value: '80', label: '80%' },
+                ]}
+              />
             </View>
           </Card.Content>
         </Card>
@@ -130,6 +210,8 @@ export default function NetworkingSettingsScreen() {
         <Button 
           mode="contained" 
           onPress={handleSaveSettings}
+          loading={saving}
+          disabled={saving || loading}
           style={styles.saveButton}
         >
           Save Settings
@@ -179,5 +261,8 @@ const styles = StyleSheet.create({
   saveButton: {
     marginTop: 16,
     marginBottom: 32,
+  },
+  segmentedContainer: {
+    marginBottom: 16,
   },
 });
