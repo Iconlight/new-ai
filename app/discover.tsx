@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, RefreshControl, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, RefreshControl, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
 import { Text, useTheme, Button, Appbar, Drawer, IconButton } from 'react-native-paper';
-import { ScrollView } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useChat } from '../src/contexts/ChatContext';
@@ -180,12 +179,17 @@ export default function DiscoverScreen() {
       {/* Main Content with Pull-to-Refresh */}
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical={true}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
             colors={[theme.colors.primary]}
             tintColor={theme.colors.primary}
+            progressBackgroundColor={theme.colors.surface}
+            progressViewOffset={0}
           />
         }
       >
@@ -261,7 +265,7 @@ export default function DiscoverScreen() {
         <View style={[styles.drawerHeader, { paddingTop: 16 }]}>
           <Text variant="titleMedium" style={styles.drawerTitle}>Recent Chats</Text>
         </View>
-        <ScrollView style={styles.chatList}>
+        <ScrollView style={styles.chatList} showsVerticalScrollIndicator={false}>
           {chats.map((chat) => (
             <Drawer.Item
               key={chat.id}
@@ -312,6 +316,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
     padding: 16,
   },
@@ -358,9 +365,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   emptyState: {
-    marginTop: 40,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    minHeight: 400,
   },
   emptyTitle: {
     marginBottom: 8,
