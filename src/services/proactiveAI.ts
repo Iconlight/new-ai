@@ -147,12 +147,23 @@ const generateContextualConversationStarters = async (
 };
 
 // Fallback conversation starters when AI service is unavailable
+// Add light randomization and informal closers to avoid repetition
 const generateFallbackStarters = (
   userInterests: string[],
   locationTopics: LocationBasedTopic | null,
   trendingTopics: TrendingTopic[]
 ): string[] => {
   const starters: string[] = [];
+  const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+  const casualClosers = [
+    'wild, right?',
+    'big if true.',
+    'what’s the tea?',
+    'hot or not?',
+    'W or L?',
+    'where do you land on this?',
+    'curious what jumps out to you.',
+  ];
   
   // Location-based starter
   if (locationTopics && locationTopics.conversationStarters.length > 0) {
@@ -162,13 +173,20 @@ const generateFallbackStarters = (
   // News-based starter
   if (trendingTopics.length > 0) {
     const topTrend = trendingTopics[0];
-    starters.push(`I saw this interesting news about ${topTrend.topic}: "${topTrend.articles[0]?.title}". What's your take on this development?`);
+    const closer = pick(casualClosers);
+    starters.push(`Low-key big news: "${topTrend.articles[0]?.title}" (${topTrend.topic}). ${closer}`);
   }
   
   // Interest-based starter
   if (userInterests.length > 0) {
     const randomInterest = userInterests[Math.floor(Math.random() * userInterests.length)];
-    starters.push(`I've been thinking about ${randomInterest} lately. What's the most fascinating aspect of it for you?`);
+    const closer = pick([
+      `from a ${randomInterest.toLowerCase()} angle, what stands out?`,
+      'spicy take?',
+      'what’s the underrated angle here?',
+      'what would you challenge about the mainstream view?',
+    ]);
+    starters.push(`Been chewing on ${randomInterest} lately — so much going on. ${closer}`);
   }
   
   // Default starters if nothing else works

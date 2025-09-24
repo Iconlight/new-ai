@@ -9,7 +9,8 @@ import {
   getUserMatches, 
   acceptMatch, 
   declineMatch,
-  enableNetworking 
+  enableNetworking,
+  getConversationIdByMatchId,
 } from '../src/services/networking';
 import { supabase } from '../src/services/supabase';
 import { ErrorBoundary, NetworkingErrorFallback } from '../src/components/ErrorBoundary';
@@ -130,13 +131,13 @@ function NetworkingScreenContent() {
     try {
       const conversation = await acceptMatch(matchId, user.id);
       if (conversation) {
-        Alert.alert(
-          'Match Accepted!',
-          'A conversation has been started. You can now chat with your new connection.',
-          [
-            { text: 'OK', onPress: () => loadMatches() }
-          ]
-        );
+        // Find the match to get the other user's name for immediate header
+        const match = matches.find(m => m.id === matchId);
+        const otherName = match?.otherUser?.name || '';
+        // Navigate directly to the networking conversation with name param
+        router.push({ pathname: `/networking/chat/${conversation.id}`, params: { name: otherName } });
+        // Refresh matches in background
+        loadMatches();
       }
     } catch (error) {
       console.error('Error accepting match:', error);
@@ -195,10 +196,12 @@ function NetworkingScreenContent() {
               style={{ backgroundColor: theme.colors.primaryContainer }}
             />
             <View style={styles.userDetails}>
-              <Text variant="titleMedium">{match.otherUser?.name || 'Anonymous User'}</Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {match.otherUser?.communicationStyle || 'Unknown'} communicator
-              </Text>
+              <Text variant="titleMedium">{match.otherUser?.name || 'User'}</Text>
+              {match.otherUser?.communicationStyle ? (
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                  {match.otherUser.communicationStyle.charAt(0).toUpperCase() + match.otherUser.communicationStyle.slice(1)} communicator
+                </Text>
+              ) : null}
             </View>
           </View>
           <Chip 
@@ -256,7 +259,14 @@ function NetworkingScreenContent() {
         {match.status === 'accepted' && (
           <Button 
             mode="contained" 
-            onPress={() => router.push(`/networking/chat/${match.id}`)}
+            onPress={async () => {
+              const convoId = match.conversationId || await getConversationIdByMatchId(match.id);
+              if (convoId) {
+                router.push({ pathname: `/networking/chat/${convoId}`, params: { name: match.otherUser?.name || '' } });
+              } else {
+                Alert.alert('Conversation not ready', 'Please try again in a moment.');
+              }
+            }}
             style={styles.chatButton}
           >
             Open Conversation

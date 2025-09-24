@@ -284,7 +284,16 @@ export const generateNetworkingConversationStarter = async (
 
     if (sharedInterests.length > 0) {
       const interest = sharedInterests[0];
-      return `Hi! I noticed we both share an interest in ${interest}. What's your take on the latest developments in this area?`;
+      
+      // Try to get specific news/context for this interest
+      const specificStarter = await generateContextualStarter(interest, pattern1.communicationStyle, pattern2.communicationStyle);
+      if (specificStarter) {
+        return specificStarter;
+      }
+      
+      // Fallback with more specific questions per interest
+      const interestQuestions = getInterestSpecificQuestions(interest);
+      return `Hi! We both love ${interest}. ${interestQuestions}`;
     }
 
     // Fallback based on communication styles
@@ -297,4 +306,108 @@ export const generateNetworkingConversationStarter = async (
     console.error('Error generating networking conversation starter:', error);
     return "Hi! I'd love to connect and learn more about your interests. What's something you're passionate about?";
   }
+};
+
+/**
+ * Generate contextual conversation starters with recent news/developments
+ */
+const generateContextualStarter = async (interest: string, style1: string, style2: string): Promise<string | null> => {
+  try {
+    // Import newsService dynamically to avoid circular dependencies
+    const { newsService } = await import('./newsService');
+    
+    // Get recent articles (all categories)
+    const articles = await newsService.fetchCurrentNews();
+    if (!articles || articles.length === 0) return null;
+    
+    // Filter articles related to the interest
+    const relevantArticles = articles.filter(article => 
+      article.category?.toLowerCase() === interest.toLowerCase() ||
+      article.title.toLowerCase().includes(interest.toLowerCase()) ||
+      article.description?.toLowerCase().includes(interest.toLowerCase())
+    );
+    
+    if (relevantArticles.length === 0) return null;
+    
+    // Pick a recent, engaging article from relevant ones
+    const recentArticle = relevantArticles[0];
+    if (!recentArticle) return null;
+    
+    // Generate starter based on communication styles
+    const isAnalytical = style1 === 'analytical' || style2 === 'analytical';
+    const isCreative = style1 === 'creative' || style2 === 'creative';
+    const isPhilosophical = style1 === 'philosophical' || style2 === 'philosophical';
+    
+    // Truncate article title if too long
+    const maxTitleLength = 60;
+    const truncatedTitle = recentArticle.title.length > maxTitleLength 
+      ? recentArticle.title.substring(0, maxTitleLength) + '...'
+      : recentArticle.title;
+    
+    if (isAnalytical) {
+      return `Hi! We both love ${interest}. Saw this: "${truncatedTitle}" - your analysis?`;
+    } else if (isCreative) {
+      return `Hi! We both love ${interest}. This caught my eye: "${truncatedTitle}" - creative thoughts?`;
+    } else if (isPhilosophical) {
+      return `Hi! We both love ${interest}. Reflecting on: "${truncatedTitle}" - deeper questions?`;
+    } else {
+      return `Hi! We both love ${interest}. Saw: "${truncatedTitle}" - your take?`;
+    }
+  } catch (error) {
+    console.log('Could not generate contextual starter:', error);
+    return null;
+  }
+};
+
+/**
+ * Get specific questions for different interests
+ */
+const getInterestSpecificQuestions = (interest: string): string => {
+  const questions: { [key: string]: string[] } = {
+    technology: [
+      "Latest AI thoughts?",
+      "Exciting tech trends?",
+      "Coolest innovation lately?",
+      "Tech changing daily life?"
+    ],
+    science: [
+      "Recent breakthrough?",
+      "Interesting research?",
+      "Mind-blowing fact?",
+      "Biggest impact field?"
+    ],
+    philosophy: [
+      "Question on your mind?",
+      "Exploring any concepts?",
+      "Life-changing idea?",
+      "Favorite thinker?"
+    ],
+    business: [
+      "Trends you're watching?",
+      "Cool startups?",
+      "Innovative models?",
+      "Business evolution?"
+    ],
+    health: [
+      "Wellness trends?",
+      "Medical research?",
+      "Health approach?",
+      "Game-changing innovation?"
+    ],
+    environment: [
+      "Exciting solutions?",
+      "Climate tech?",
+      "Sustainability wins?",
+      "Priority challenge?"
+    ]
+  };
+  
+  const interestQuestions = questions[interest.toLowerCase()] || [
+    "What interests you most?",
+    "Recent developments?",
+    "What got you started?",
+    "Most exciting part?"
+  ];
+  
+  return interestQuestions[Math.floor(Math.random() * interestQuestions.length)];
 };

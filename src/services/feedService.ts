@@ -5,6 +5,119 @@ import { testFeedTables } from './testFeedTables';
 
 export type FeedType = 'interests' | 'foryou';
 
+// --- Conversational templates to avoid repetitive closers and add personality ---
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function summarize(text?: string, max = 140): string {
+  if (!text) return '';
+  const clean = String(text).replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  return clean.slice(0, max - 1).trimEnd() + '…';
+}
+
+function categoryAngle(category?: string): string {
+  const cat = (category || 'general').toLowerCase();
+  const map: Record<string, string[]> = {
+    technology: [
+      'devs are buzzing',
+      'product folks are split',
+      'the roadmap might shift',
+    ],
+    science: [
+      'researchers are debating',
+      'the data looks spicy',
+      'methodology wars incoming',
+    ],
+    business: [
+      'markets are twitchy',
+      'operators are watching margins',
+      'boardrooms are whispering',
+    ],
+    health: [
+      'doctors weigh risks/benefits',
+      'public health folks are cautious',
+      'small change, big outcomes?',
+    ],
+    entertainment: [
+      'fans are divided',
+      'critics are loud',
+      'numbers vs hype again',
+    ],
+    sports: [
+      'stats vs momentum',
+      'locker room vibes',
+      'underdog energy?',
+    ],
+    environment: [
+      'policy vs reality',
+      'climate folks are watching',
+      'small steps, big impact?',
+    ],
+    general: [
+      'everyone’s got takes',
+      'tea is piping',
+      'honestly kind of wild',
+    ],
+  };
+  const pool = map[cat] || map.general;
+  return pick(pool);
+}
+
+function hookOpeners(category?: string): string {
+  const hooks = [
+    'Low-key big news:',
+    'Okay, this is wild:',
+    'Spotted this making waves:',
+    'Tiny detail, huge implications:',
+    'Heads up:',
+    'Did you see this?',
+  ];
+  return pick(hooks);
+}
+
+function dynamicCloser(feedType: FeedType, category?: string, interests?: string[]): string {
+  const generic = [
+    'wild or what?',
+    'hot or not?',
+    'where do you land on this?',
+    'does this change anything for you?',
+    'any curveballs here?',
+    'worth keeping an eye on.',
+    'big if true.',
+    'curious what jumps out to you.',
+  ];
+
+  const casual = [
+    'spill your take.',
+    'what’s the tea?',
+    'honestly… thoughts?',
+    'be honest—overhyped or legit?',
+    'call it: W or L?',
+  ];
+
+  const interestLine = interests && interests.length
+    ? `from a ${pick(interests).toLowerCase()} angle, what stands out?`
+    : undefined;
+
+  const pool = feedType === 'interests'
+    ? [interestLine, categoryAngle(category), ...generic, ...casual].filter(Boolean) as string[]
+    : [categoryAngle(category), ...generic, ...casual];
+
+  return pick(pool);
+}
+
+function buildStarter(opts: { feedType: FeedType; title: string; description?: string; category?: string; interests?: string[] }): string {
+  const { feedType, title, description, category, interests } = opts;
+  const opener = hookOpeners(category);
+  const desc = summarize(description, 160);
+  const closer = dynamicCloser(feedType, category, interests);
+  const middle = desc ? `“${title}” — ${desc}` : `“${title}”`;
+  // Keep tone informal but informative
+  return `${opener} ${middle} ${closer}`.trim();
+}
+
 // Ensure we operate as the authenticated user to satisfy RLS
 async function resolveAuthedUserId(requestedUserId: string): Promise<string> {
   const { data: auth } = await supabase.auth.getUser();
@@ -174,7 +287,13 @@ export async function refreshInterestsFeed(userId: string): Promise<void> {
   // Map into conversation-starter items
   const items = selected.map((a) => ({
     topic: `Focused: ${a.category || 'topic'}`,
-    message: `"${a.title}" — ${a.description || ''} What resonates with your interests here?`,
+    message: buildStarter({
+      feedType: 'interests',
+      title: a.title,
+      description: a.description,
+      category: a.category,
+      interests,
+    }),
     interests: interests.length > 0 ? interests : [a.category || 'general'],
     category: a.category,
     source_type: 'news' as const,
@@ -237,7 +356,12 @@ export async function refreshForYouFeed(userId: string): Promise<void> {
 
     items.push({
       topic: `${categoryEmoji} ${article.category || 'News'}`,
-      message: `"${article.title}" — ${article.description || ''} What's your take on this?`,
+      message: buildStarter({
+        feedType: 'foryou',
+        title: article.title,
+        description: article.description,
+        category: article.category,
+      }),
       interests: [article.category || 'general'],
       category: article.category,
       source_type: 'news',

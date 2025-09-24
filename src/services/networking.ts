@@ -11,6 +11,7 @@ export interface NetworkingMatch {
   status: 'pending' | 'accepted' | 'declined' | 'expired';
   createdAt: Date;
   expiresAt: Date;
+  conversationId?: string;
   otherUser?: {
     id: string;
     name: string;
@@ -19,6 +20,47 @@ export interface NetworkingMatch {
     communicationStyle: string;
   };
 }
+
+// Helper to compute display name
+const toDisplayName = (full_name?: string | null, email?: string | null, fallback: string = 'User') => {
+  if (full_name && full_name.trim().length > 0) return full_name;
+  if (email && email.includes('@')) return email.split('@')[0];
+  return fallback;
+};
+
+// Robust profile fetch with multiple fallbacks
+const fetchDisplayProfile = async (otherUserId: string, conversationId?: string) => {
+  try {
+    // 1) Conversation-based RPC (best when we have a conversation)
+    if (conversationId) {
+      const { data: rpcConv } = await supabase.rpc('get_conversation_peer_profile', { conversation_id: conversationId });
+      const p1 = Array.isArray(rpcConv) ? rpcConv[0] : rpcConv;
+      if (p1 && (p1.full_name || p1.email)) {
+        return { name: toDisplayName(p1.full_name, p1.email), avatar: p1.avatar_url as string | undefined };
+      }
+    }
+
+    // 2) Match-based RPC
+    const { data: rpcMatch } = await supabase.rpc('get_matched_user_profile', { target_user_id: otherUserId });
+    const p2 = Array.isArray(rpcMatch) ? rpcMatch[0] : rpcMatch;
+    if (p2 && (p2.full_name || p2.email)) {
+      return { name: toDisplayName(p2.full_name, p2.email), avatar: p2.avatar_url as string | undefined };
+    }
+
+    // 3) Direct select from profiles (RLS should allow if matched or in conversation)
+    const { data: p3 } = await supabase
+      .from('profiles')
+      .select('full_name, email, avatar_url')
+      .eq('id', otherUserId)
+      .maybeSingle();
+    if (p3) {
+      return { name: toDisplayName(p3.full_name, p3.email), avatar: (p3 as any).avatar_url as string | undefined };
+    }
+  } catch (e) {
+    console.warn('[Networking] fetchDisplayProfile error:', (e as any)?.message || e);
+  }
+  return { name: 'User', avatar: undefined };
+};
 
 export interface NetworkingConversation {
   id: string;
@@ -158,6 +200,16 @@ export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]>
           .eq('user_id', comp.userId2)
           .single();
 
+        // Fetch other user's display profile (name/avatar) with fallbacks
+        const display = await fetchDisplayProfile(comp.userId2);
+
+        // If conversation already exists for this match (edge cases), fetch id
+        const { data: existingConv } = await supabase
+          .from('networking_conversations')
+          .select('id')
+          .eq('match_id', match.id)
+          .maybeSingle();
+
         matches.push({
           id: match.id,
           userId1: match.user_id_1,
@@ -168,9 +220,10 @@ export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]>
           status: match.status,
           createdAt: new Date(match.created_at),
           expiresAt: new Date(match.expires_at),
+          conversationId: existingConv?.id,
           otherUser: {
             id: comp.userId2,
-            name: 'User', // Would get from profiles table
+            name: display.name,
             interests: otherUserProfile?.interests || [],
             communicationStyle: otherUserProfile?.communication_style || 'unknown'
           }
@@ -208,20 +261,96 @@ export const getUserMatches = async (userId: string): Promise<NetworkingMatch[]>
 
     if (error || !matches) return [];
 
-    return matches.map(match => ({
-      id: match.id,
-      userId1: match.user_id_1,
-      userId2: match.user_id_2,
-      compatibilityScore: match.compatibility_score,
-      sharedInterests: match.shared_interests,
-      matchReason: match.match_reason,
-      status: match.status,
-      createdAt: new Date(match.created_at),
-      expiresAt: new Date(match.expires_at)
+    const enriched = await Promise.all(matches.map(async (match: any) => {
+      const otherId = match.user_id_1 === userId ? match.user_id_2 : match.user_id_1;
+
+      // Fetch conversation if exists
+      const { data: conv } = await supabase
+        .from('networking_conversations')
+        .select('id')
+        .eq('match_id', match.id)
+        .maybeSingle();
+
+      // Fetch other user's profile and style
+      const [{ data: pattern, error: patternError }, display] = await Promise.all([
+        supabase.from('user_conversation_patterns').select('communication_style, interests').eq('user_id', otherId).maybeSingle(),
+        fetchDisplayProfile(otherId, conv?.id || undefined)
+      ]);
+      
+      if (patternError) {
+        console.log('Pattern fetch error for user', otherId, ':', patternError);
+      }
+      console.log('Resolved display name for user', otherId, ':', display?.name);
+      console.log('Pattern data for user', otherId, ':', pattern);
+
+      const nm: NetworkingMatch = {
+        id: match.id,
+        userId1: match.user_id_1,
+        userId2: match.user_id_2,
+        compatibilityScore: match.compatibility_score,
+        sharedInterests: match.shared_interests,
+        matchReason: match.match_reason,
+        status: match.status,
+        createdAt: new Date(match.created_at),
+        expiresAt: new Date(match.expires_at),
+        conversationId: conv?.id,
+        otherUser: {
+          id: otherId,
+          name: display?.name || 'User',
+          avatar: display?.avatar || undefined,
+          interests: pattern?.interests || [],
+          communicationStyle: pattern?.communication_style || 'unknown',
+        }
+      };
+      return nm;
     }));
+
+    return enriched;
   } catch (error) {
     console.error('Error getting user matches:', error);
     return [];
+  }
+};
+
+/**
+ * Fetch conversation id by match id
+ */
+export const getConversationIdByMatchId = async (matchId: string): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('networking_conversations')
+      .select('id')
+      .eq('match_id', matchId)
+      .maybeSingle();
+    if (error) return null;
+    return data?.id || null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Get conversation info including the other user's name for the given viewer
+ */
+export const getNetworkingConversationInfo = async (
+  conversationId: string,
+  viewerUserId: string
+): Promise<{ otherUserId: string; otherUserName: string } | null> => {
+  try {
+    const { data: conv, error } = await supabase
+      .from('networking_conversations')
+      .select('user_id_1, user_id_2')
+      .eq('id', conversationId)
+      .single();
+    if (error || !conv) return null;
+    const otherId = conv.user_id_1 === viewerUserId ? conv.user_id_2 : conv.user_id_1;
+    const display = await fetchDisplayProfile(otherId, conversationId);
+    return {
+      otherUserId: otherId,
+      otherUserName: display?.name || 'Connection'
+    };
+  } catch {
+    return null;
   }
 };
 
@@ -261,15 +390,21 @@ export const acceptMatch = async (matchId: string, userId: string): Promise<Netw
 
     if (convError || !conversation) return null;
 
-    // Add starter message
+    // Add starter message as the accepting user to satisfy RLS (auth.uid() = sender_id)
     await supabase
       .from('networking_messages')
       .insert({
         conversation_id: conversation.id,
-        sender_id: match.user_id_1, // System message from the matcher
+        sender_id: userId,
         content: conversationStarter,
         message_type: 'starter'
       });
+
+    // Update last message timestamp
+    await supabase
+      .from('networking_conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', conversation.id);
 
     // Log activity
     await supabase
