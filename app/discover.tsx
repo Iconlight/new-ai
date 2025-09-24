@@ -78,10 +78,20 @@ export default function DiscoverScreen() {
   const edgePanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: (evt, gestureState) => {
-        console.log('[EdgeGesture] Start at x:', evt.nativeEvent.pageX);
+        console.log('[EdgeGesture] Start at x:', evt.nativeEvent.pageX, 'y:', evt.nativeEvent.pageY);
+        // Don't capture touches in the hamburger button area (top 100px to be safe)
+        if (evt.nativeEvent.pageY < 100) {
+          console.log('[EdgeGesture] Ignoring touch in header area, y:', evt.nativeEvent.pageY);
+          return false;
+        }
         return true;
       },
       onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Also check Y coordinate here as a backup
+        if (evt.nativeEvent.pageY < 100) {
+          console.log('[EdgeGesture] Ignoring move in header area, y:', evt.nativeEvent.pageY);
+          return false;
+        }
         const shouldSet = Math.abs(gestureState.dx) > 5 && gestureState.dx > 0;
         if (shouldSet) console.log('[EdgeGesture] Moving right, dx:', gestureState.dx);
         return shouldSet;
@@ -255,7 +265,7 @@ export default function DiscoverScreen() {
       <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
         <Appbar.Action 
           icon="menu" 
-          onPress={() => setDrawerOpen(true)} 
+          onPress={() => setDrawerOpen(true)}
         />
         <Appbar.Content title="ProactiveAI" />
         <Appbar.Action 
@@ -602,7 +612,7 @@ const styles = StyleSheet.create({
   },
   edgeCatcher: {
     position: 'absolute',
-    top: 0,
+    top: 100, // Start well below the header
     left: 0,
     bottom: 0,
     width: 50,
