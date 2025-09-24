@@ -44,8 +44,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   const refreshChats = async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('[ChatContext] No user, skipping chat refresh');
+      return;
+    }
 
+    console.log('[ChatContext] Refreshing chats for user:', user.id);
     try {
       const { data, error } = await supabase
         .from('chats')
@@ -54,12 +58,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .order('updated_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching chats:', error);
+        console.error('[ChatContext] Error fetching chats:', error);
       } else {
+        console.log('[ChatContext] Fetched chats:', data?.length || 0, 'chats');
+        if (data && data.length > 0) {
+          console.log('[ChatContext] First chat:', data[0]);
+        }
         setChats(data || []);
       }
     } catch (error) {
-      console.error('Error fetching chats:', error);
+      console.error('[ChatContext] Error fetching chats:', error);
     }
   };
 
