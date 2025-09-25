@@ -28,32 +28,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        fetchUserProfile(session.user);
-      } else {
-        setLoading(false);
+    let isMounted = true;
+    
+    const initializeAuth = async () => {
+      try {
+        console.log('[Auth] Initializing authentication...');
+        
+        // Get initial session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('[Auth] Error getting session:', error);
+        }
+        
+        if (isMounted) {
+          if (session?.user) {
+            console.log('[Auth] Found existing session for user:', session.user.id);
+            setSession(session);
+            await fetchUserProfile(session.user);
+          } else {
+            console.log('[Auth] No existing session found');
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error('[Auth] Error initializing auth:', error);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      if (session?.user) {
-        await fetchUserProfile(session.user);
-      } else {
-        setUser(null);
-        setLoading(false);
+      console.log('[Auth] Auth state changed:', event, session?.user?.id || 'no user');
+      
+      if (isMounted) {
+        setSession(session);
+        if (session?.user) {
+          await fetchUserProfile(session.user);
+        } else {
+          setUser(null);
+          setLoading(false);
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchUserProfile = async (authUser: SupabaseUser) => {
     try {
+      console.log('[Auth] Fetching profile for user:', authUser.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -61,12 +94,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error);
+        console.error('[Auth] Error fetching profile:', error);
       } else if (data) {
+        console.log('[Auth] Profile fetched successfully:', data.full_name || data.email);
         setUser(data);
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('[Auth] Error fetching profile:', error);
     } finally {
       setLoading(false);
     }
@@ -118,7 +152,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    console.log('[Auth] Signing out user');
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('[Auth] Error signing out:', error);
+    } else {
+      console.log('[Auth] User signed out successfully');
+    }
   };
 
   const value: AuthContextType = {
