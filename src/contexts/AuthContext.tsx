@@ -2,6 +2,9 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase, SUPABASE_URL } from '../services/supabase';
 import { User } from '../types';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
+import { Linking } from 'react-native';
 
 interface AuthContextType {
   session: Session | null;
@@ -10,6 +13,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  signInWithGoogle: () => Promise<{ error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -151,6 +155,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      // Complete any pending auth sessions (required for iOS)
+      WebBrowser.maybeCompleteAuthSession();
+
+      // Use a simple deep link that works reliably with Expo
+      const redirectTo = 'proactiveai://auth-callback';
+      console.log('Auth.signInWithGoogle redirect:', redirectTo);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) {
+        console.error('Auth.signInWithGoogle error:', error);
+        return { error: error.message };
+      }
+
+      if (!data?.url) {
+        return { error: 'Unable to start Google sign-in' };
+      }
+
+      console.log('Opening OAuth URL:', data.url);
+
+      // Open the OAuth URL - the auth-callback route will handle the response
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      
+      if (result.type === 'cancel') {
+        return { error: 'Google sign-in cancelled' };
+      }
+      
+      // If we get here, the auth-callback route will handle the rest
+      // The AuthContext will automatically update when the session changes
+      return {};
+    } catch (error) {
+      console.error('Auth.signInWithGoogle network/unknown error:', error);
+      return { error: error instanceof Error ? error.message : 'Network error during Google sign in' };
+    }
+  };
+
   const signOut = async () => {
     console.log('[Auth] Signing out user');
     const { error } = await supabase.auth.signOut();
@@ -168,6 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signUp,
     signIn,
     signOut,
+    signInWithGoogle,
   };
 
   return (

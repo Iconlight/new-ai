@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, Animated } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Animated, BackHandler } from 'react-native';
 import { GiftedChat, Bubble, MessageText, IMessage } from 'react-native-gifted-chat';
 import { Appbar, useTheme, ActivityIndicator } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useChat } from '../../../src/contexts/ChatContext';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import MarkdownText from '../../../components/ui/MarkdownText';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function ChatScreen() {
   const theme = useTheme();
@@ -15,6 +16,9 @@ export default function ChatScreen() {
   const [opening, setOpening] = useState(true);
   const suppressOpeningOverlay = openingParam === '1';
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Ensure Android hardware back navigates to Discover instead of exiting
+  useAndroidBackToDiscover();
 
   useEffect(() => {
     if (id && user) {
@@ -52,7 +56,14 @@ export default function ChatScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-        <Appbar.BackAction onPress={() => router.back()} />
+        <Appbar.BackAction onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            // Fallback to Discover when history stack is empty (e.g., cold start from notification)
+            router.replace('/discover');
+          }
+        }} />
         <Appbar.Content 
           title={currentChat?.title || 'Chat'} 
           titleStyle={{ color: theme.colors.onSurface }}
@@ -166,3 +177,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+// Handle Android hardware back to ensure we navigate to Discover instead of exiting app
+// Placed at the end of the file to keep component definition uncluttered
+function useAndroidBackToDiscover() {
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/discover');
+        }
+        return true; // we handled it
+      };
+      if (Platform.OS === 'android') {
+        const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => sub.remove();
+      }
+      return undefined;
+    }, [])
+  );
+}

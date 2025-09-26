@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { Appbar, useTheme } from 'react-native-paper';
-import { GiftedChat, IMessage, Bubble } from 'react-native-gifted-chat';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useAuth } from '../../../src/contexts/AuthContext';
-import { getNetworkingMessages, sendNetworkingMessage, getNetworkingConversationInfo } from '../../../src/services/networking';
-import { supabase } from '../../../src/services/supabase';
+import React, { useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Bubble, GiftedChat, IMessage } from 'react-native-gifted-chat';
+import { Appbar, useTheme } from 'react-native-paper';
 import MarkdownText from '../../../components/ui/MarkdownText';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { getNetworkingConversationInfo, getNetworkingMessages, sendNetworkingMessage } from '../../../src/services/networking';
+import { supabase } from '../../../src/services/supabase';
 
 export default function NetworkingChatScreen() {
   const theme = useTheme();

@@ -5,12 +5,14 @@ import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 export default function SignUp() {
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleSignUp = async () => {
     if (!email || !password || !fullName || !confirmPassword) {
@@ -75,7 +77,14 @@ export default function SignUp() {
           onChangeText={setPassword}
           mode="outlined"
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!showPassword}
+          right={
+            <TextInput.Icon
+              icon={showPassword ? 'eye-off' : 'eye'}
+              onPress={() => setShowPassword(v => !v)}
+              forceTextInputFocus={false}
+            />
+          }
         />
         
         <TextInput
@@ -84,7 +93,14 @@ export default function SignUp() {
           onChangeText={setConfirmPassword}
           mode="outlined"
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!showConfirmPassword}
+          right={
+            <TextInput.Icon
+              icon={showConfirmPassword ? 'eye-off' : 'eye'}
+              onPress={() => setShowConfirmPassword(v => !v)}
+              forceTextInputFocus={false}
+            />
+          }
         />
         
         <Button
@@ -95,6 +111,23 @@ export default function SignUp() {
           style={styles.button}
         >
           Create Account
+        </Button>
+        
+        <Button
+          mode="outlined"
+          onPress={async () => {
+            setLoading(true);
+            const { error } = await signInWithGoogle();
+            setLoading(false);
+            if (error) {
+              Alert.alert('Google Sign-In Error', error);
+            } else {
+              router.replace('/(tabs)');
+            }
+          }}
+          disabled={loading}
+        >
+          Continue with Google
         </Button>
         
         <Button

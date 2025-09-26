@@ -34,6 +34,7 @@ export default function RootLayout() {
                   <Stack.Screen name="chat/[id]" />
                   <Stack.Screen name="profile" />
                   <Stack.Screen name="onboarding" />
+                  <Stack.Screen name="auth-callback" />
                 </Stack>
                 <StatusBar style={isDark ? 'light' : 'dark'} />
               </NotificationProvider>

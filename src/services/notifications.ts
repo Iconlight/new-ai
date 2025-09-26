@@ -60,15 +60,23 @@ export const scheduleDailyNotifications = async (conversationStarters: string[])
     // Cancel existing notifications
     await Notifications.cancelAllScheduledNotificationsAsync();
 
-    // Schedule 3 notifications for today
+    // Schedule 4 notifications per day as requested
     const now = new Date();
     const times = [
-      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0), // 9 AM
-      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 0), // 2 PM
-      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 19, 0), // 7 PM
+      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0),  // 9 AM
+      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 0), // 1 PM
+      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0), // 5 PM
+      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0), // 8 PM
     ];
 
-    for (let i = 0; i < Math.min(conversationStarters.length, 3); i++) {
+    const titles = [
+      'Good Morning! 🌅',
+      'Afternoon Thoughts 🤔',
+      'Evening Reflection 🌆',
+      'Night Chat 🌙'
+    ];
+
+    for (let i = 0; i < Math.min(conversationStarters.length, 4); i++) {
       const scheduledTime = times[i];
       
       // Only schedule if the time hasn't passed today
@@ -77,16 +85,29 @@ export const scheduleDailyNotifications = async (conversationStarters: string[])
         
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: 'Let\'s Chat! 💬',
+            title: titles[i] || 'Let\'s Chat! 💬',
             body: conversationStarters[i],
-            data: { conversationStarter: conversationStarters[i] },
+            data: { 
+              conversationStarter: conversationStarters[i],
+              notificationTime: scheduledTime.toISOString(),
+              index: i
+            },
           },
           trigger: {
             type: 'timeInterval',
             seconds: secondsFromNow,
           } as any,
         });
+        
+        console.log(`Scheduled notification ${i + 1} for ${scheduledTime.toLocaleTimeString()}`);
+      } else {
+        console.log(`Skipping notification ${i + 1} - time has passed (${scheduledTime.toLocaleTimeString()})`);
       }
+    }
+    
+    // Schedule notifications for tomorrow if we have more starters
+    if (conversationStarters.length > 4) {
+      await scheduleNextDayNotifications(conversationStarters.slice(4));
     }
   } catch (error) {
     console.error('Error scheduling notifications:', error);
@@ -105,27 +126,42 @@ export const scheduleNextDayNotifications = async (conversationStarters: string[
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const times = [
-      new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 9, 0),
-      new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 14, 0),
-      new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 19, 0),
+      new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 9, 0),  // 9 AM
+      new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 13, 0), // 1 PM
+      new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 17, 0), // 5 PM
+      new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 20, 0), // 8 PM
     ];
 
-    for (let i = 0; i < Math.min(conversationStarters.length, 3); i++) {
+    const titles = [
+      'Good Morning! 🌅',
+      'Afternoon Thoughts 🤔',
+      'Evening Reflection 🌆',
+      'Night Chat 🌙'
+    ];
+
+    for (let i = 0; i < Math.min(conversationStarters.length, 4); i++) {
       const scheduledTime = times[i];
       const now = new Date();
       const secondsFromNow = Math.floor((scheduledTime.getTime() - now.getTime()) / 1000);
       
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'Let\'s Chat! 💬',
+          title: titles[i] || 'Let\'s Chat! 💬',
           body: conversationStarters[i],
-          data: { conversationStarter: conversationStarters[i] },
+          data: { 
+            conversationStarter: conversationStarters[i],
+            notificationTime: scheduledTime.toISOString(),
+            index: i,
+            nextDay: true
+          },
         },
         trigger: {
           type: 'timeInterval',
           seconds: secondsFromNow,
         } as any,
       });
+      
+      console.log(`Scheduled next day notification ${i + 1} for ${scheduledTime.toLocaleString()}`);
     }
   } catch (error) {
     console.error('Error scheduling next day notifications:', error);

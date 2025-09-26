@@ -1,14 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { Button, Text, TextInput, Surface } from 'react-native-paper';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 export default function SignIn() {
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
+  const params = useLocalSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Show OAuth error if redirected from auth-callback
+  useEffect(() => {
+    if (params.error) {
+      Alert.alert('Authentication Error', params.error as string);
+    }
+  }, [params.error]);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -51,7 +60,14 @@ export default function SignIn() {
           onChangeText={setPassword}
           mode="outlined"
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!showPassword}
+          right={
+            <TextInput.Icon
+              icon={showPassword ? 'eye-off' : 'eye'}
+              onPress={() => setShowPassword(v => !v)}
+              forceTextInputFocus={false}
+            />
+          }
         />
         
         <Button
@@ -62,6 +78,23 @@ export default function SignIn() {
           style={styles.button}
         >
           Sign In
+        </Button>
+        
+        <Button
+          mode="outlined"
+          onPress={async () => {
+            setLoading(true);
+            const { error } = await signInWithGoogle();
+            setLoading(false);
+            if (error) {
+              Alert.alert('Google Sign-In Error', error);
+            } else {
+              router.replace('/(tabs)');
+            }
+          }}
+          disabled={loading}
+        >
+          Continue with Google
         </Button>
         
         <Button

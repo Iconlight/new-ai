@@ -12,7 +12,7 @@ export interface NetworkingMatch {
   createdAt: Date;
   expiresAt: Date;
   conversationId?: string;
-  otherUser?: {
+  otherUser: {
     id: string;
     name: string;
     avatar?: string;
@@ -133,6 +133,8 @@ export const enableNetworking = async (
  */
 export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]> => {
   try {
+    console.log('🔍 Finding new matches for user:', userId);
+    
     // Check if user has networking enabled
     const { data: preferences } = await supabase
       .from('user_networking_preferences')
@@ -141,7 +143,12 @@ export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]>
       .eq('is_networking_enabled', true)
       .single();
 
-    if (!preferences) return [];
+    if (!preferences) {
+      console.log('❌ User networking not enabled or preferences not found');
+      return [];
+    }
+
+    console.log('✅ User networking preferences:', preferences);
 
     // Check daily match limit
     const today = new Date();
@@ -253,55 +260,84 @@ export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]>
  */
 export const getUserMatches = async (userId: string): Promise<NetworkingMatch[]> => {
   try {
+    console.log('🔍 Fetching user matches for:', userId);
+    
+    // First, let's test if the table exists with a simple query
+    const { data: testData, error: testError } = await supabase
+      .from('user_matches')
+      .select('count')
+      .limit(1);
+    
+    if (testError) {
+      console.error('❌ user_matches table test failed:', testError);
+      
+      // Fallback: Try to get matches from networking_activity table (old approach)
+      console.log('🔄 Falling back to networking_activity table...');
+      return await getMatchesFromActivity(userId);
+    }
+    
+    console.log('✅ user_matches table accessible');
+    
     const { data: matches, error } = await supabase
       .from('user_matches')
-      .select('*')
+      .select(`
+        *
+      `)
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
+      .neq('status', 'declined') // Hide declined connections
       .order('created_at', { ascending: false });
 
-    if (error || !matches) return [];
+    if (error) {
+      console.error('Error fetching user matches:', error);
+      return await getMatchesFromActivity(userId);
+    }
+
+    console.log(`Found ${matches.length} matches for user ${userId}`);
 
     const enriched = await Promise.all(matches.map(async (match: any) => {
       const otherId = match.user_id_1 === userId ? match.user_id_2 : match.user_id_1;
+      console.log(`Processing match ${match.id} with user ${otherId}, status: ${match.status}`);
 
       // Fetch conversation if exists
-      const { data: conv } = await supabase
+      const { data: conv, error: convError } = await supabase
         .from('networking_conversations')
-        .select('id')
+        .select('id, status')
         .eq('match_id', match.id)
         .maybeSingle();
+
+      if (convError) {
+        console.warn(`⚠️ Error fetching conversation for match ${match.id}:`, convError);
+      }
+
+      console.log(`💬 Conversation for match ${match.id}:`, conv ? `ID: ${conv.id}, Status: ${conv.status}` : 'None');
 
       // Fetch other user's profile and style
       const [{ data: pattern, error: patternError }, display] = await Promise.all([
         supabase.from('user_conversation_patterns').select('communication_style, interests').eq('user_id', otherId).maybeSingle(),
-        fetchDisplayProfile(otherId, conv?.id || undefined)
+        fetchDisplayProfile(otherId, conv?.id)
       ]);
-      
-      if (patternError) {
-        console.log('Pattern fetch error for user', otherId, ':', patternError);
-      }
-      console.log('Resolved display name for user', otherId, ':', display?.name);
-      console.log('Pattern data for user', otherId, ':', pattern);
 
       const nm: NetworkingMatch = {
         id: match.id,
         userId1: match.user_id_1,
         userId2: match.user_id_2,
-        compatibilityScore: match.compatibility_score,
-        sharedInterests: match.shared_interests,
-        matchReason: match.match_reason,
+        compatibilityScore: match.compatibility_score || 75,
+        sharedInterests: match.shared_interests || [],
+        matchReason: match.match_reason || 'Compatible conversation styles',
         status: match.status,
         createdAt: new Date(match.created_at),
-        expiresAt: new Date(match.expires_at),
+        expiresAt: new Date(match.expires_at || Date.now() + 7 * 24 * 60 * 60 * 1000),
         conversationId: conv?.id,
         otherUser: {
           id: otherId,
-          name: display?.name || 'User',
-          avatar: display?.avatar || undefined,
-          interests: pattern?.interests || [],
-          communicationStyle: pattern?.communication_style || 'unknown',
+          name: display.name,
+          avatar: display.avatar,
+          interests: pattern?.interests || match.shared_interests || [],
+          communicationStyle: pattern?.communication_style || 'analytical'
         }
       };
+      
+      console.log(`✅ Processed match: ${nm.otherUser.name} (${nm.status}) - ${conv ? 'Has conversation' : 'No conversation'}`);
       return nm;
     }));
 
@@ -359,6 +395,8 @@ export const getNetworkingConversationInfo = async (
  */
 export const acceptMatch = async (matchId: string, userId: string): Promise<NetworkingConversation | null> => {
   try {
+    console.log(`🤝 Accepting match ${matchId} by user ${userId}`);
+    
     // Update match status
     const { data: match, error: matchError } = await supabase
       .from('user_matches')
@@ -368,7 +406,17 @@ export const acceptMatch = async (matchId: string, userId: string): Promise<Netw
       .select()
       .single();
 
-    if (matchError || !match) return null;
+    if (matchError) {
+      console.error('❌ Error updating match status:', matchError);
+      return null;
+    }
+    
+    if (!match) {
+      console.error('❌ Match not found or user not authorized');
+      return null;
+    }
+
+    console.log('✅ Match status updated to accepted:', match);
 
     // Generate conversation starter
     const conversationStarter = await generateNetworkingConversationStarter(
@@ -502,10 +550,13 @@ export const sendNetworkingMessage = async (
         conversation_id: conversationId,
         sender_id: senderId,
         content,
-        message_type: 'text'
+        message_type: 'user'
       });
 
     if (!error) {
+      // Send notification to the other user in the conversation
+      await sendNetworkingMessageNotification(conversationId, senderId, content);
+
       // Update conversation last message time
       await supabase
         .from('networking_conversations')
@@ -563,20 +614,170 @@ export const updateNetworkingPreferences = async (
   }>
 ): Promise<boolean> => {
   try {
-    const { error } = await supabase
-      .from('user_networking_preferences')
-      .upsert({
-        user_id: userId,
-        is_networking_enabled: preferences.isNetworkingEnabled,
-        visibility_level: preferences.visibilityLevel,
-        max_matches_per_day: preferences.maxMatchesPerDay,
-        preferred_communication_styles: preferences.preferredCommunicationStyles,
-        minimum_compatibility_score: preferences.minimumCompatibilityScore
-      });
+    console.log('Updating networking preferences for user:', userId, preferences);
+    
+    // Build the update object with only defined values
+    const updateData: any = {
+      user_id: userId,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (preferences.isNetworkingEnabled !== undefined) {
+      updateData.is_networking_enabled = preferences.isNetworkingEnabled;
+    }
+    if (preferences.visibilityLevel !== undefined) {
+      updateData.visibility_level = preferences.visibilityLevel;
+    }
+    if (preferences.maxMatchesPerDay !== undefined) {
+      updateData.max_matches_per_day = preferences.maxMatchesPerDay;
+    }
+    if (preferences.preferredCommunicationStyles !== undefined) {
+      updateData.preferred_communication_styles = preferences.preferredCommunicationStyles;
+    }
+    if (preferences.minimumCompatibilityScore !== undefined) {
+      updateData.minimum_compatibility_score = preferences.minimumCompatibilityScore;
+    }
 
-    return !error;
+    const { data, error } = await supabase
+      .from('user_networking_preferences')
+      .upsert(updateData, {
+        onConflict: 'user_id'
+      })
+      .select();
+
+    if (error) {
+      console.error('Supabase error updating networking preferences:', error);
+      return false;
+    }
+    
+    console.log('Successfully updated networking preferences:', data);
+    return true;
   } catch (error) {
     console.error('Error updating networking preferences:', error);
     return false;
+  }
+};
+
+/**
+ * Fallback function to get matches from networking_activity table (legacy approach)
+ */
+const getMatchesFromActivity = async (userId: string): Promise<NetworkingMatch[]> => {
+  try {
+    console.log('🔄 Using networking_activity fallback for user:', userId);
+    
+    // Get networking activities where user was matched
+    const { data: activities, error } = await supabase
+      .from('networking_activity')
+      .select('*')
+      .eq('user_id', userId)
+      .in('activity_type', ['match_found', 'match_accepted'])
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching networking activities:', error);
+      return [];
+    }
+
+    if (!activities || activities.length === 0) {
+      console.log('No networking activities found');
+      return [];
+    }
+
+    // Convert activities to match format
+    const matches: NetworkingMatch[] = [];
+    for (const activity of activities) {
+      if (activity.related_user_id && activity.related_user_id !== userId) {
+        const profile = await fetchDisplayProfile(activity.related_user_id);
+        
+        matches.push({
+          id: activity.id,
+          userId1: userId,
+          userId2: activity.related_user_id,
+          compatibilityScore: activity.metadata?.compatibility_score || 75,
+          sharedInterests: activity.metadata?.shared_interests || [],
+          matchReason: activity.metadata?.match_reason || 'Compatible conversation styles',
+          status: activity.activity_type === 'match_accepted' ? 'accepted' : 'pending',
+          createdAt: new Date(activity.created_at),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+          otherUser: {
+            id: activity.related_user_id,
+            name: profile.name,
+            avatar: profile.avatar,
+            interests: activity.metadata?.interests || [],
+            communicationStyle: activity.metadata?.communication_style || 'analytical'
+          }
+        });
+      }
+    }
+
+    console.log(`✅ Found ${matches.length} matches from networking_activity`);
+    return matches;
+  } catch (error) {
+    console.error('Error in getMatchesFromActivity:', error);
+    return [];
+  }
+};
+
+/**
+ * Sends a push notification when a networking message is received
+ */
+const sendNetworkingMessageNotification = async (
+  conversationId: string,
+  senderId: string,
+  content: string
+): Promise<void> => {
+  try {
+    // Get conversation details to find the recipient
+    const { data: conversation } = await supabase
+      .from('networking_conversations')
+      .select('user_id_1, user_id_2')
+      .eq('id', conversationId)
+      .single();
+
+    if (!conversation) return;
+
+    // Determine recipient (the user who is NOT the sender)
+    const recipientId = conversation.user_id_1 === senderId 
+      ? conversation.user_id_2 
+      : conversation.user_id_1;
+
+    // Get sender's profile for the notification
+    const senderProfile = await fetchDisplayProfile(senderId, conversationId);
+    
+    // Check if recipient has notifications enabled
+    const { data: preferences } = await supabase
+      .from('user_preferences')
+      .select('notification_enabled')
+      .eq('user_id', recipientId)
+      .single();
+
+    if (preferences?.notification_enabled === false) return;
+
+    // Import notification service dynamically to avoid circular imports
+    const { scheduleNotificationAsync } = await import('expo-notifications');
+    
+    // Truncate long messages for notification
+    const truncatedContent = content.length > 100 
+      ? content.substring(0, 97) + '...' 
+      : content;
+
+    await scheduleNotificationAsync({
+      content: {
+        title: `💬 ${senderProfile.name}`,
+        body: truncatedContent,
+        data: {
+          type: 'networking_message',
+          conversationId,
+          senderId,
+          senderName: senderProfile.name,
+          deepLink: `proactiveai://networking/chat/${conversationId}?name=${encodeURIComponent(senderProfile.name)}`
+        },
+      },
+      trigger: null, // Send immediately
+    });
+
+    console.log(`Sent networking message notification to ${recipientId} from ${senderProfile.name}`);
+  } catch (error) {
+    console.error('Error sending networking message notification:', error);
   }
 };

@@ -207,14 +207,33 @@ export async function refreshInterestsFeed(userId: string): Promise<void> {
   // Clear cache to ensure fresh articles on each refresh
   await newsService.clearCache();
   
-  // Fetch current news with broader categories to get more articles
-  console.log('📰 Fetching current news...');
-  const allCategories = ['general', 'technology', 'science', 'business', 'health', 'entertainment', 'sports', 'environment'];
-  const allArticles: NewsArticle[] = await newsService.fetchCurrentNews(allCategories);
-  console.log('📰 Total articles fetched:', allArticles.length);
+  // Fetch current news with broader categories and multiple sources
+  console.log('📰 Fetching current news from multiple sources...');
+  const allCategories = ['general', 'technology', 'science', 'business', 'health', 'entertainment', 'sports', 'environment', 'politics', 'world'];
   
-  // Don't limit articles here - let all categories be represented
-  const articles = allArticles; // Use all articles for better category distribution
+  // Fetch from multiple sources in parallel for better diversity
+  const [newsArticles, trendingTopics] = await Promise.all([
+    newsService.fetchCurrentNews(allCategories),
+    newsService.getTrendingTopics(interests) // Get trending topics specific to user interests
+  ]);
+  
+  console.log('📰 News articles fetched:', newsArticles.length);
+  console.log('🔥 Trending topics found:', trendingTopics.length);
+  
+  // Combine news articles with trending topic articles for more diversity
+  const trendingArticles = trendingTopics.flatMap(topic => topic.articles);
+  const allArticles = [...newsArticles, ...trendingArticles];
+  
+  // Remove duplicates based on title similarity
+  const uniqueArticles = allArticles.filter((article, index, self) => 
+    index === self.findIndex(a => 
+      a.id === article.id || 
+      (a.title && article.title && a.title.toLowerCase() === article.title.toLowerCase())
+    )
+  );
+  
+  console.log('📰 Total unique articles after deduplication:', uniqueArticles.length);
+  const articles = uniqueArticles;
 
   let selected: NewsArticle[] = [];
   
@@ -233,14 +252,75 @@ export async function refreshInterestsFeed(userId: string): Promise<void> {
       Array.from(categoryGroups.entries()).map(([cat, arts]) => `${cat}: ${arts.length}`).join(', ')
     );
     
-    // Map user interests to article categories
+    // Enhanced mapping of user interests to article categories
     const interestToCategoryMap: Record<string, string[]> = {
-      'technology': ['technology'],
-      'science': ['science'],
+      // Technology & Science
+      'technology': ['technology', 'science'],
+      'artificial intelligence': ['technology', 'science'],
+      'programming': ['technology'],
+      'software development': ['technology'],
+      'science': ['science', 'technology'],
+      'physics': ['science'],
+      'biology': ['science', 'health'],
+      'chemistry': ['science'],
+      'mathematics': ['science'],
+      'engineering': ['technology', 'science'],
+      
+      // Entertainment & Media
       'movies & tv': ['entertainment'],
       'entertainment': ['entertainment'],
+      'music': ['entertainment'],
+      'gaming': ['entertainment', 'technology'],
+      'books': ['entertainment'],
+      'art': ['entertainment'],
+      'photography': ['entertainment'],
+      
+      // Business & Finance
       'business': ['business'],
-      'health': ['health']
+      'finance': ['business'],
+      'investing': ['business'],
+      'entrepreneurship': ['business'],
+      'marketing': ['business'],
+      'economics': ['business'],
+      
+      // Health & Lifestyle
+      'health': ['health'],
+      'fitness': ['health'],
+      'nutrition': ['health'],
+      'mental health': ['health'],
+      'wellness': ['health'],
+      'medicine': ['health', 'science'],
+      
+      // Sports & Recreation
+      'sports': ['sports'],
+      'football': ['sports'],
+      'basketball': ['sports'],
+      'soccer': ['sports'],
+      'baseball': ['sports'],
+      'tennis': ['sports'],
+      'olympics': ['sports'],
+      
+      // World & Politics
+      'politics': ['politics', 'general'],
+      'world news': ['world', 'politics', 'general'],
+      'international relations': ['world', 'politics'],
+      'history': ['general', 'world'],
+      'geography': ['world', 'general'],
+      
+      // Environment & Nature
+      'environment': ['environment', 'science'],
+      'climate change': ['environment', 'science'],
+      'sustainability': ['environment', 'business'],
+      'nature': ['environment', 'science'],
+      'travel': ['general', 'world'],
+      
+      // Food & Culture
+      'food': ['general', 'health'],
+      'cooking': ['general', 'health'],
+      'culture': ['general', 'world'],
+      'philosophy': ['general'],
+      'psychology': ['science', 'health'],
+      'education': ['general', 'science']
     };
     
     // Get articles from relevant categories, distributed evenly
@@ -251,12 +331,36 @@ export async function refreshInterestsFeed(userId: string): Promise<void> {
       const relevantCategories = interestToCategoryMap[interest.toLowerCase()] || [interest.toLowerCase()];
       console.log(`🔍 Interest "${interest}" -> categories:`, relevantCategories);
       
+      let articlesFound = 0;
       relevantCategories.forEach(category => {
         const categoryArticles = categoryGroups.get(category) || [];
         const toAdd = categoryArticles.slice(0, articlesPerInterest);
         selectedByCategory.push(...toAdd);
+        articlesFound += toAdd.length;
         console.log(`📰 Added ${toAdd.length} articles from ${category} for ${interest}`);
       });
+      
+      // If we didn't find enough articles for this interest, try fuzzy matching
+      if (articlesFound < articlesPerInterest) {
+        console.log(`🔍 Fuzzy matching for interest "${interest}" (found ${articlesFound}/${articlesPerInterest})`);
+        const interestKeywords = interest.toLowerCase().split(/\s+/);
+        
+        articles.forEach(article => {
+          if (articlesFound >= articlesPerInterest) return;
+          if (selectedByCategory.some(selected => selected.id === article.id)) return;
+          
+          const searchText = `${article.title} ${article.description}`.toLowerCase();
+          const hasKeyword = interestKeywords.some(keyword => 
+            searchText.includes(keyword) && keyword.length > 2
+          );
+          
+          if (hasKeyword) {
+            selectedByCategory.push(article);
+            articlesFound++;
+            console.log(`📰 Fuzzy matched: "${article.title}" for ${interest}`);
+          }
+        });
+      }
     });
     
     // Remove duplicates and limit to 12

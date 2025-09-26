@@ -1,17 +1,21 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, BackHandler } from 'react-native';
 import { GiftedChat, Bubble, IMessage } from 'react-native-gifted-chat';
 import { Appbar, useTheme } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useChat } from '../../src/contexts/ChatContext';
 import { useAuth } from '../../src/contexts/AuthContext';
 import MarkdownText from '../../components/ui/MarkdownText';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function ChatScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { currentChat, messages, loading, selectChat, sendMessage, isTyping } = useChat();
+
+  // Ensure Android hardware back navigates to Discover instead of exiting
+  useAndroidBackToDiscover();
 
   useEffect(() => {
     if (id && user) {
@@ -31,7 +35,13 @@ export default function ChatScreen() {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Appbar.Header>
-          <Appbar.BackAction onPress={() => router.back()} />
+          <Appbar.BackAction onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/discover');
+            }
+          }} />
           <Appbar.Content title="Loading..." />
         </Appbar.Header>
       </View>
@@ -41,7 +51,13 @@ export default function ChatScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => router.back()} />
+        <Appbar.BackAction onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/discover');
+          }
+        }} />
         <Appbar.Content title={currentChat?.title || 'Chat'} />
       </Appbar.Header>
 
@@ -118,3 +134,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+// Ensure Android hardware back navigates to Discover instead of exiting app
+function useAndroidBackToDiscover() {
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/discover');
+        }
+        return true;
+      };
+      if (Platform.OS === 'android') {
+        const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => sub.remove();
+      }
+      return undefined;
+    }, [])
+  );
+}

@@ -13,7 +13,7 @@ export default function NotificationsScreen() {
   const { generateDailyConversations } = useNotification();
   const [preferences, setPreferences] = useState({
     notification_enabled: true,
-    daily_conversation_count: 3,
+    daily_conversation_count: 4,
   });
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
   const [loading, setLoading] = useState(false);
@@ -56,7 +56,7 @@ export default function NotificationsScreen() {
       if (data) {
         setPreferences({
           notification_enabled: data.notification_enabled ?? true,
-          daily_conversation_count: data.daily_conversation_count ?? 3,
+          daily_conversation_count: data.daily_conversation_count ?? 4,
         });
       }
     } catch (error) {
@@ -116,7 +116,9 @@ export default function NotificationsScreen() {
         body: 'This is a test notification. Your notifications are working!',
         data: { test: true },
       },
-      trigger: { seconds: 1 },
+      trigger: { 
+        seconds: 1 
+      } as any,
     });
 
     Alert.alert('Test Sent', 'A test notification will appear shortly.');
