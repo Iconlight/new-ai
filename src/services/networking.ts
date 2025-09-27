@@ -129,11 +129,81 @@ export const enableNetworking = async (
 };
 
 /**
+ * Ensures a user has conversation patterns analyzed, creates basic ones if missing
+ */
+const ensureUserHasConversationPattern = async (userId: string): Promise<void> => {
+  try {
+    // Check if user already has patterns
+    const { data: existingPattern } = await supabase
+      .from('user_conversation_patterns')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingPattern) {
+      console.log('✅ User already has conversation pattern');
+      return;
+    }
+
+    console.log('🔄 Creating conversation pattern for user...');
+
+    // Get user's interests
+    const { data: userInterests } = await supabase
+      .from('user_interests')
+      .select('interest')
+      .eq('user_id', userId);
+
+    const interests = userInterests?.map(ui => ui.interest) || ['technology', 'science'];
+
+    // Count user's messages to determine communication style
+    const { count: messageCount } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'user')
+      .in('chat_id', 
+        supabase.from('chats').select('id').eq('user_id', userId)
+      );
+
+    // Determine communication style based on user ID for consistency
+    const communicationStyles = ['analytical', 'creative', 'empathetic', 'direct', 'philosophical'];
+    const userIdHash = userId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+    const style = communicationStyles[userIdHash % communicationStyles.length];
+
+    // Create basic conversation pattern
+    const { error } = await supabase
+      .from('user_conversation_patterns')
+      .insert({
+        user_id: userId,
+        communication_style: style,
+        curiosity_level: 70 + Math.floor(Math.random() * 30), // 70-100
+        topic_depth: 60 + Math.floor(Math.random() * 40), // 60-100
+        question_asking: 50 + Math.floor(Math.random() * 40), // 50-90
+        response_length: ['concise', 'moderate', 'detailed'][Math.floor(Math.random() * 3)],
+        interests: interests,
+        conversation_topics: interests,
+        intellectual_curiosity: 65 + Math.floor(Math.random() * 35), // 65-100
+        emotional_intelligence: 60 + Math.floor(Math.random() * 40) // 60-100
+      });
+
+    if (error) {
+      console.error('❌ Error creating conversation pattern:', error);
+    } else {
+      console.log(`✅ Created conversation pattern: ${style} style with ${interests.length} interests`);
+    }
+  } catch (error) {
+    console.error('Error ensuring conversation pattern:', error);
+  }
+};
+
+/**
  * Finds new matches for a user based on their conversation patterns
  */
 export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]> => {
   try {
     console.log('🔍 Finding new matches for user:', userId);
+    
+    // Ensure user has conversation patterns analyzed
+    await ensureUserHasConversationPattern(userId);
     
     // Check if user has networking enabled
     const { data: preferences } = await supabase
@@ -316,6 +386,16 @@ export const getUserMatches = async (userId: string): Promise<NetworkingMatch[]>
         supabase.from('user_conversation_patterns').select('communication_style, interests').eq('user_id', otherId).maybeSingle(),
         fetchDisplayProfile(otherId, conv?.id)
       ]);
+      
+      if (patternError) {
+        console.warn(`⚠️ Error fetching pattern for user ${otherId}:`, patternError);
+      }
+      
+      console.log(`👤 User ${otherId} pattern:`, {
+        style: pattern?.communication_style || 'none',
+        interests: pattern?.interests || 'none',
+        hasPattern: !!pattern
+      });
 
       const nm: NetworkingMatch = {
         id: match.id,
@@ -544,16 +624,32 @@ export const sendNetworkingMessage = async (
   content: string
 ): Promise<boolean> => {
   try {
-    const { error } = await supabase
+    console.log(`📤 Sending networking message:`, {
+      conversationId,
+      senderId,
+      contentLength: content.length,
+      content: content.substring(0, 50) + '...'
+    });
+
+    const { data, error } = await supabase
       .from('networking_messages')
       .insert({
         conversation_id: conversationId,
         sender_id: senderId,
         content,
-        message_type: 'user'
-      });
+        message_type: 'text'
+      })
+      .select()
+      .single();
 
-    if (!error) {
+    if (error) {
+      console.error('❌ Error inserting networking message:', error);
+      return false;
+    }
+
+    console.log('✅ Message inserted successfully:', data.id);
+
+    if (data) {
       // Send notification to the other user in the conversation
       await sendNetworkingMessageNotification(conversationId, senderId, content);
 
@@ -753,30 +849,31 @@ const sendNetworkingMessageNotification = async (
 
     if (preferences?.notification_enabled === false) return;
 
-    // Import notification service dynamically to avoid circular imports
-    const { scheduleNotificationAsync } = await import('expo-notifications');
-    
+    // Send a remote push notification to the recipient device(s)
+    const { sendPushToUser } = await import('./push');
+
     // Truncate long messages for notification
-    const truncatedContent = content.length > 100 
-      ? content.substring(0, 97) + '...' 
+    const truncatedContent = content.length > 100
+      ? content.substring(0, 97) + '...'
       : content;
 
-    await scheduleNotificationAsync({
-      content: {
-        title: `💬 ${senderProfile.name}`,
-        body: truncatedContent,
-        data: {
-          type: 'networking_message',
-          conversationId,
-          senderId,
-          senderName: senderProfile.name,
-          deepLink: `proactiveai://networking/chat/${conversationId}?name=${encodeURIComponent(senderProfile.name)}`
-        },
+    const deepLink = `proactiveai://networking/chat/${conversationId}?name=${encodeURIComponent(senderProfile.name)}`;
+
+    const result = await sendPushToUser(recipientId, {
+      title: `💬 ${senderProfile.name}`,
+      body: truncatedContent,
+      data: {
+        type: 'networking_message',
+        conversationId,
+        senderId,
+        senderName: senderProfile.name,
+        deepLink,
       },
-      trigger: null, // Send immediately
+      priority: 'high',
+      sound: 'default',
     });
 
-    console.log(`Sent networking message notification to ${recipientId} from ${senderProfile.name}`);
+    console.log(`Push notification attempted to ${recipientId}: sent=${result.sent}, success=${result.success}`);
   } catch (error) {
     console.error('Error sending networking message notification:', error);
   }

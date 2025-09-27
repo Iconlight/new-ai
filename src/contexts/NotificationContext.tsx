@@ -48,6 +48,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const token = await registerForPushNotificationsAsync();
         if (token) {
           setExpoPushToken(token);
+          // Persist the token to Supabase so other users can send you push notifications
+          try {
+            if (user) {
+              const deviceType = Platform.OS === 'ios' ? 'ios' : (Platform.OS === 'android' ? 'android' : 'web');
+              await supabase
+                .from('user_push_tokens')
+                .upsert({
+                  user_id: user.id,
+                  push_token: token,
+                  device_type: deviceType,
+                  is_active: true,
+                  updated_at: new Date().toISOString(),
+                }, { onConflict: 'user_id,push_token' });
+            }
+          } catch (err) {
+            console.error('Failed to save push token:', err);
+          }
         }
         
         // Auto-schedule daily notifications if user has enabled them

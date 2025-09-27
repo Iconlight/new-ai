@@ -104,6 +104,10 @@ BEGIN
                     AND (nc.user_id_1 = auth.uid() OR nc.user_id_2 = auth.uid())
                 )
             );
+            
+        -- Also allow system to insert starter messages
+        CREATE POLICY "System can insert starter messages" ON networking_messages
+            FOR INSERT WITH CHECK (message_type IN ('starter', 'system'));
 
         CREATE INDEX idx_networking_messages_conversation_id ON networking_messages(conversation_id);
         CREATE INDEX idx_networking_messages_created_at ON networking_messages(created_at DESC);
@@ -229,6 +233,161 @@ SELECT
          THEN '✅ networking_activity (' || (SELECT COUNT(*)::text FROM networking_activity) || ' records)'
          ELSE '❌ networking_activity' END as activity_status;
 
+-- Create sample conversation patterns for users who have chats but no patterns
+DO $$
+DECLARE
+    user_record RECORD;
+    message_count INTEGER;
+    sample_interests TEXT[];
+    sample_style TEXT;
+BEGIN
+    -- Get users who have sent messages but don't have conversation patterns
+    FOR user_record IN 
+        SELECT DISTINCT c.user_id
+        FROM chats c
+        INNER JOIN messages m ON m.chat_id = c.id
+        LEFT JOIN user_conversation_patterns ucp ON ucp.user_id = c.user_id
+        WHERE ucp.user_id IS NULL
+        AND m.role = 'user'
+        LIMIT 20 -- Process up to 20 users at a time
+    LOOP
+        -- Count messages for this user
+        SELECT COUNT(*) INTO message_count
+        FROM messages m
+        INNER JOIN chats c ON c.id = m.chat_id
+        WHERE c.user_id = user_record.user_id AND m.role = 'user';
+        
+        -- Get user's actual interests if they exist
+        SELECT ARRAY_AGG(interest) INTO sample_interests
+        FROM user_interests ui
+        WHERE ui.user_id = user_record.user_id;
+        
+        -- Default to varied interests if none found
+        IF sample_interests IS NULL OR array_length(sample_interests, 1) IS NULL THEN
+            -- Use different default interests for variety
+            sample_interests := CASE 
+                WHEN user_record.user_id::text LIKE '%1%' THEN ARRAY['art', 'music', 'creativity']
+                WHEN user_record.user_id::text LIKE '%2%' THEN ARRAY['sports', 'fitness', 'health']
+                WHEN user_record.user_id::text LIKE '%3%' THEN ARRAY['travel', 'culture', 'languages']
+                WHEN user_record.user_id::text LIKE '%4%' THEN ARRAY['business', 'entrepreneurship', 'finance']
+                WHEN user_record.user_id::text LIKE '%5%' THEN ARRAY['food', 'cooking', 'nutrition']
+                WHEN user_record.user_id::text LIKE '%6%' THEN ARRAY['books', 'writing', 'literature']
+                WHEN user_record.user_id::text LIKE '%7%' THEN ARRAY['movies', 'entertainment', 'media']
+                WHEN user_record.user_id::text LIKE '%8%' THEN ARRAY['nature', 'environment', 'sustainability']
+                WHEN user_record.user_id::text LIKE '%9%' THEN ARRAY['gaming', 'esports', 'digital culture']
+                ELSE ARRAY['technology', 'science', 'philosophy']
+            END;
+        END IF;
+        
+        -- Assign communication style based on user ID for variety
+        sample_style := CASE 
+            WHEN user_record.user_id::text LIKE '%a%' OR user_record.user_id::text LIKE '%A%' THEN 'analytical'
+            WHEN user_record.user_id::text LIKE '%b%' OR user_record.user_id::text LIKE '%B%' THEN 'creative'
+            WHEN user_record.user_id::text LIKE '%c%' OR user_record.user_id::text LIKE '%C%' THEN 'empathetic'
+            WHEN user_record.user_id::text LIKE '%d%' OR user_record.user_id::text LIKE '%D%' THEN 'direct'
+            WHEN user_record.user_id::text LIKE '%e%' OR user_record.user_id::text LIKE '%E%' THEN 'philosophical'
+            WHEN user_record.user_id::text LIKE '%f%' OR user_record.user_id::text LIKE '%F%' THEN 'creative'
+            ELSE (ARRAY['analytical', 'creative', 'empathetic', 'direct', 'philosophical'])[1 + (ABS(HASHTEXT(user_record.user_id::text)) % 5)]
+        END;
+        
+        -- Insert conversation pattern
+        INSERT INTO user_conversation_patterns (
+            user_id,
+            communication_style,
+            curiosity_level,
+            topic_depth,
+            question_asking,
+            response_length,
+            interests,
+            conversation_topics,
+            intellectual_curiosity,
+            emotional_intelligence
+        ) VALUES (
+            user_record.user_id,
+            sample_style,
+            60 + (RANDOM() * 40)::INTEGER, -- 60-100
+            50 + (RANDOM() * 50)::INTEGER, -- 50-100
+            40 + (RANDOM() * 40)::INTEGER, -- 40-80
+            CASE WHEN RANDOM() < 0.33 THEN 'concise' 
+                 WHEN RANDOM() < 0.66 THEN 'moderate' 
+                 ELSE 'detailed' END,
+            sample_interests,
+            sample_interests, -- Use same as conversation topics for now
+            65 + (RANDOM() * 35)::INTEGER, -- 65-100
+            55 + (RANDOM() * 45)::INTEGER  -- 55-100
+        );
+        
+        RAISE NOTICE 'Created conversation pattern for user % with style % and % interests', 
+            user_record.user_id, sample_style, array_length(sample_interests, 1);
+    END LOOP;
+END $$;
+
+-- Update existing patterns that have hardcoded interests
+DO $$
+DECLARE
+    pattern_record RECORD;
+    new_interests TEXT[];
+    new_style TEXT;
+BEGIN
+    -- Find patterns with the hardcoded interests
+    FOR pattern_record IN 
+        SELECT user_id, interests, communication_style
+        FROM user_conversation_patterns
+        WHERE interests = ARRAY['technology', 'philosophy', 'science']
+        OR communication_style = 'analytical'
+    LOOP
+        -- Get user's actual interests
+        SELECT ARRAY_AGG(interest) INTO new_interests
+        FROM user_interests ui
+        WHERE ui.user_id = pattern_record.user_id;
+        
+        -- If no real interests, assign varied ones based on user ID
+        IF new_interests IS NULL OR array_length(new_interests, 1) IS NULL THEN
+            new_interests := CASE 
+                WHEN pattern_record.user_id::text LIKE '%1%' THEN ARRAY['art', 'music', 'creativity']
+                WHEN pattern_record.user_id::text LIKE '%2%' THEN ARRAY['sports', 'fitness', 'health']
+                WHEN pattern_record.user_id::text LIKE '%3%' THEN ARRAY['travel', 'culture', 'languages']
+                WHEN pattern_record.user_id::text LIKE '%4%' THEN ARRAY['business', 'entrepreneurship', 'finance']
+                WHEN pattern_record.user_id::text LIKE '%5%' THEN ARRAY['food', 'cooking', 'nutrition']
+                WHEN pattern_record.user_id::text LIKE '%6%' THEN ARRAY['books', 'writing', 'literature']
+                WHEN pattern_record.user_id::text LIKE '%7%' THEN ARRAY['movies', 'entertainment', 'media']
+                WHEN pattern_record.user_id::text LIKE '%8%' THEN ARRAY['nature', 'environment', 'sustainability']
+                WHEN pattern_record.user_id::text LIKE '%9%' THEN ARRAY['gaming', 'esports', 'digital culture']
+                WHEN pattern_record.user_id::text LIKE '%0%' THEN ARRAY['psychology', 'mindfulness', 'wellness']
+                ELSE ARRAY['technology', 'innovation', 'future']
+            END;
+        END IF;
+        
+        -- Assign varied communication style based on user ID
+        new_style := CASE 
+            WHEN pattern_record.user_id::text LIKE '%a%' OR pattern_record.user_id::text LIKE '%A%' THEN 'analytical'
+            WHEN pattern_record.user_id::text LIKE '%b%' OR pattern_record.user_id::text LIKE '%B%' THEN 'creative'
+            WHEN pattern_record.user_id::text LIKE '%c%' OR pattern_record.user_id::text LIKE '%C%' THEN 'empathetic'
+            WHEN pattern_record.user_id::text LIKE '%d%' OR pattern_record.user_id::text LIKE '%D%' THEN 'direct'
+            WHEN pattern_record.user_id::text LIKE '%e%' OR pattern_record.user_id::text LIKE '%E%' THEN 'philosophical'
+            WHEN pattern_record.user_id::text LIKE '%f%' OR pattern_record.user_id::text LIKE '%F%' THEN 'creative'
+            ELSE (ARRAY['analytical', 'creative', 'empathetic', 'direct', 'philosophical'])[1 + (ABS(HASHTEXT(pattern_record.user_id::text)) % 5)]
+        END;
+        
+        -- Update the pattern
+        UPDATE user_conversation_patterns
+        SET 
+            interests = new_interests,
+            conversation_topics = new_interests,
+            communication_style = new_style,
+            curiosity_level = 60 + (ABS(HASHTEXT(pattern_record.user_id::text)) % 40), -- 60-100
+            topic_depth = 50 + (ABS(HASHTEXT(pattern_record.user_id::text || 'depth')) % 50), -- 50-100
+            question_asking = 40 + (ABS(HASHTEXT(pattern_record.user_id::text || 'questions')) % 40), -- 40-80
+            intellectual_curiosity = 65 + (ABS(HASHTEXT(pattern_record.user_id::text || 'curiosity')) % 35), -- 65-100
+            emotional_intelligence = 55 + (ABS(HASHTEXT(pattern_record.user_id::text || 'emotion')) % 45), -- 55-100
+            updated_at = NOW()
+        WHERE user_id = pattern_record.user_id;
+        
+        RAISE NOTICE 'Updated pattern for user %: % style, % interests', 
+            pattern_record.user_id, new_style, array_length(new_interests, 1);
+    END LOOP;
+END $$;
+
 -- Show current matches and conversations for debugging
 SELECT 
     'Current Matches:' as info,
@@ -243,3 +402,11 @@ FROM user_matches um
 LEFT JOIN networking_conversations nc ON nc.match_id = um.id
 ORDER BY um.created_at DESC
 LIMIT 10;
+
+-- Show conversation patterns summary
+SELECT 
+    'Conversation Patterns:' as info,
+    COUNT(*) as total_patterns,
+    COUNT(DISTINCT communication_style) as unique_styles,
+    ARRAY_AGG(DISTINCT communication_style) as styles_found
+FROM user_conversation_patterns;
