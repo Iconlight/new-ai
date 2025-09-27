@@ -7,7 +7,7 @@ import { supabase } from '../src/services/supabase';
 import { PREDEFINED_INTERESTS } from '../src/types';
 
 export default function Onboarding() {
-  const { user } = useAuth();
+  const { user, checkOnboardingStatus } = useAuth();
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [customInterest, setCustomInterest] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,7 +50,9 @@ export default function Onboarding() {
         Alert.alert('Error', 'Failed to save interests');
         console.error('Error saving interests:', error);
       } else {
-        router.replace('/(tabs)');
+        // Refresh onboarding status and navigate to discover
+        await checkOnboardingStatus();
+        router.replace('/discover');
       }
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred');

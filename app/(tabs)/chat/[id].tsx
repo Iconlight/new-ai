@@ -57,12 +57,9 @@ export default function ChatScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
         <Appbar.BackAction onPress={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            // Fallback to Discover when history stack is empty (e.g., cold start from notification)
-            router.replace('/discover');
-          }
+          // Always navigate to discover page instead of using router.back()
+          // This ensures consistent navigation behavior
+          router.push('/discover');
         }} />
         <Appbar.Content 
           title={currentChat?.title || 'Chat'} 
@@ -184,11 +181,8 @@ function useAndroidBackToDiscover() {
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
-        if (router.canGoBack()) {
-          router.back();
-        } else {
-          router.replace('/discover');
-        }
+        // Always navigate to discover page for consistent behavior
+        router.push('/discover');
         return true; // we handled it
       };
       if (Platform.OS === 'android') {

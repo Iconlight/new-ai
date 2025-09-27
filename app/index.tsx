@@ -1,33 +1,27 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Text } from 'react-native-paper';
 import { router } from 'expo-router';
+import React, { useEffect } from 'react';
+import AnimatedLoading from '../components/ui/AnimatedLoading';
 import { useAuth } from '../src/contexts/AuthContext';
 
 export default function IndexScreen() {
-  const { session, loading } = useAuth();
+  const { session, loading, needsOnboarding } = useAuth();
 
   useEffect(() => {
     if (!loading) {
       if (session) {
-        router.replace('/discover');
+        if (needsOnboarding) {
+          console.log('[Index] User needs onboarding, redirecting to onboarding');
+          router.replace('/onboarding');
+        } else {
+          console.log('[Index] User authenticated, redirecting to discover');
+          router.replace('/discover');
+        }
       } else {
+        console.log('[Index] No session, redirecting to auth');
         router.replace('/(auth)');
       }
     }
-  }, [session, loading]);
+  }, [session, loading, needsOnboarding]);
 
-  return (
-    <View style={styles.container}>
-      <Text variant="headlineMedium">Loading...</Text>
-    </View>
-  );
+  return <AnimatedLoading message="Initializing ProactiveAI..." />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

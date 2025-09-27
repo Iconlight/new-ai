@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { ActivityIndicator, Text } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../src/services/supabase';
+import AnimatedLoading from '../components/ui/AnimatedLoading';
 
 export default function AuthCallbackScreen() {
   const params = useLocalSearchParams();
@@ -47,8 +46,8 @@ export default function AuthCallbackScreen() {
         }
 
         console.log('Google sign-in successful, redirecting to app...');
-        // Navigate to main app
-        router.replace('/(tabs)');
+        // Navigate to main app - let the index screen handle onboarding check
+        router.replace('/');
       } catch (error) {
         console.error('Auth callback error:', error);
         router.replace({
@@ -61,22 +60,5 @@ export default function AuthCallbackScreen() {
     handleAuthCallback();
   }, [params]);
 
-  return (
-    <View style={styles.container}>
-      <ActivityIndicator animating size="large" />
-      <Text style={styles.text}>Completing sign-in...</Text>
-    </View>
-  );
+  return <AnimatedLoading message="Completing sign-in..." />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  text: {
-    textAlign: 'center',
-  },
-});

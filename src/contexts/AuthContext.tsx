@@ -10,10 +10,12 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  needsOnboarding: boolean;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<{ error?: string }>;
+  checkOnboardingStatus: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -88,24 +91,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  const checkOnboardingStatus = async (): Promise<boolean> => {
+    if (!session?.user?.id) return false;
+    
+    try {
+      console.log('[Auth] Checking onboarding status for user:', session.user.id);
+      const { data, error } = await supabase
+        .from('user_interests')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .limit(1);
+
+      if (error) {
+        console.error('[Auth] Error checking onboarding status:', error);
+        return false;
+      }
+
+      // User needs onboarding if they have no interests
+      const needsOnboarding = !data || data.length === 0;
+      console.log('[Auth] User needs onboarding:', needsOnboarding);
+      setNeedsOnboarding(needsOnboarding);
+      return needsOnboarding;
+    } catch (error) {
+      console.error('[Auth] Error checking onboarding status:', error);
+      return false;
+    }
+  };
+
   const fetchUserProfile = async (authUser: SupabaseUser) => {
     try {
       console.log('[Auth] Fetching profile for user:', authUser.id);
-      const { data, error } = await supabase
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000)
+      );
+      
+      const fetchPromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', authUser.id)
         .single();
 
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+
       if (error) {
         console.error('[Auth] Error fetching profile:', error);
+        // Still set loading to false even if profile fetch fails
+        setLoading(false);
       } else if (data) {
         console.log('[Auth] Profile fetched successfully:', data.full_name || data.email);
         setUser(data);
+        // Check if user needs onboarding
+        const needsOnboarding = await checkOnboardingStatus();
+        setNeedsOnboarding(needsOnboarding);
+        setLoading(false);
+      } else {
+        console.log('[Auth] No profile data found');
+        setLoading(false);
       }
     } catch (error) {
       console.error('[Auth] Error fetching profile:', error);
-    } finally {
       setLoading(false);
     }
   };
@@ -213,10 +259,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     session,
     user,
     loading,
+    needsOnboarding,
     signUp,
     signIn,
     signOut,
     signInWithGoogle,
+    checkOnboardingStatus,
   };
 
   return (
