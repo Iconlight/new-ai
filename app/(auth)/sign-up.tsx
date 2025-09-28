@@ -25,12 +25,11 @@ export default function SignUp() {
       Alert.alert('Error', 'Passwords do not match');
       return;
     }
-
     if (password.length < 6) {
       Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
-
+  
     setLoading(true);
     const { error } = await signUp(email, password, fullName);
     
@@ -42,6 +41,7 @@ export default function SignUp() {
         'Account created successfully! Please check your email to verify your account.',
         [{ text: 'OK', onPress: () => router.push('/onboarding') }]
       );
+    }
     setLoading(false);
   };
 
