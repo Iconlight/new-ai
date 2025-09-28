@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, Card, Button, Chip, useTheme, Appbar, FAB, Avatar } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -135,7 +136,7 @@ function NetworkingScreenContent() {
         const match = matches.find(m => m.id === matchId);
         const otherName = match?.otherUser?.name || '';
         // Navigate directly to the networking conversation with name param
-        router.push({ pathname: `/networking/chat/${conversation.id}`, params: { name: otherName } });
+        router.push({ pathname: '/networking/chat/[id]', params: { id: conversation.id, name: otherName } });
         // Refresh matches in background
         loadMatches();
       }
@@ -186,7 +187,7 @@ function NetworkingScreenContent() {
   };
 
   const renderMatch = (match: NetworkingMatch) => (
-    <Card key={match.id} style={styles.matchCard}>
+    <Card key={match.id} style={[styles.matchCard, styles.glassCard]}>
       <Card.Content>
         <View style={styles.matchHeader}>
           <View style={styles.userInfo}>
@@ -262,7 +263,7 @@ function NetworkingScreenContent() {
             onPress={async () => {
               const convoId = match.conversationId || await getConversationIdByMatchId(match.id);
               if (convoId) {
-                router.push({ pathname: `/networking/chat/${convoId}`, params: { name: match.otherUser?.name || '' } });
+                router.push({ pathname: '/networking/chat/[id]', params: { id: convoId, name: match.otherUser?.name || '' } });
               } else {
                 Alert.alert('Conversation not ready', 'Please try again in a moment.');
               }
@@ -278,64 +279,81 @@ function NetworkingScreenContent() {
 
   if (!networkingEnabled) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-          <Appbar.BackAction onPress={() => router.back()} />
-          <Appbar.Content title="AI Networking" />
-        </Appbar.Header>
+      <LinearGradient
+        colors={["#160427", "#2B0B5E", "#4C1D95"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientBg}
+      >
+        <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
+          <Appbar.Header style={styles.glassHeader}>
+            <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+            <Appbar.Content title="AI Networking" titleStyle={{ color: '#ffffff' }} />
+          </Appbar.Header>
 
-        <View style={styles.enableContainer}>
-          <Text variant="headlineMedium" style={styles.enableTitle}>
-            🤝 AI-Powered Networking
-          </Text>
-          <Text variant="bodyLarge" style={styles.enableDescription}>
-            Connect with people based on actual conversational compatibility, not just demographics.
-          </Text>
-          
-          <View style={styles.featureList}>
-            <Text variant="titleMedium" style={styles.featureTitle}>How it works:</Text>
-            <Text variant="bodyMedium" style={styles.featureItem}>
-              • AI analyzes your conversation patterns and interests
-            </Text>
-            <Text variant="bodyMedium" style={styles.featureItem}>
-              • Finds people with compatible communication styles
-            </Text>
-            <Text variant="bodyMedium" style={styles.featureItem}>
-              • Suggests personalized conversation starters
-            </Text>
-            <Text variant="bodyMedium" style={styles.featureItem}>
-              • Privacy-first: you control all connections
-            </Text>
+          <View style={styles.enableContainer}>
+            <Card style={[styles.enableCard, styles.glassCard]}>
+              <Card.Content>
+                <Text variant="headlineMedium" style={[styles.enableTitle, { color: '#FFFFFF' }]}>
+                  🤝 AI-Powered Networking
+                </Text>
+                <Text variant="bodyLarge" style={[styles.enableDescription, { color: 'rgba(237,233,254,0.85)' }]}>
+                  Connect with people based on actual conversational compatibility, not just demographics.
+                </Text>
+                
+                <View style={styles.featureList}>
+                  <Text variant="titleMedium" style={[styles.featureTitle, { color: '#FFFFFF' }]}>How it works:</Text>
+                  <Text variant="bodyMedium" style={[styles.featureItem, { color: 'rgba(237,233,254,0.85)' }]}>
+                    • AI analyzes your conversation patterns and interests
+                  </Text>
+                  <Text variant="bodyMedium" style={[styles.featureItem, { color: 'rgba(237,233,254,0.85)' }]}>
+                    • Finds people with compatible communication styles
+                  </Text>
+                  <Text variant="bodyMedium" style={[styles.featureItem, { color: 'rgba(237,233,254,0.85)' }]}>
+                    • Suggests personalized conversation starters
+                  </Text>
+                  <Text variant="bodyMedium" style={[styles.featureItem, { color: 'rgba(237,233,254,0.85)' }]}>
+                    • Privacy-first: you control all connections
+                  </Text>
+                </View>
+
+                <Button 
+                  mode="contained" 
+                  onPress={handleEnableNetworking}
+                  style={styles.enableButton}
+                >
+                  Enable AI Networking
+                </Button>
+              </Card.Content>
+            </Card>
           </View>
-
-          <Button 
-            mode="contained" 
-            onPress={handleEnableNetworking}
-            style={styles.enableButton}
-          >
-            Enable AI Networking
-          </Button>
         </View>
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="AI Networking" />
-        <Appbar.Action icon="cog" onPress={() => router.push('/networking/settings')} />
-      </Appbar.Header>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
+        <Appbar.Header style={styles.glassHeader}>
+          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+          <Appbar.Content title="AI Networking" titleStyle={{ color: '#ffffff' }} />
+          <Appbar.Action color="#ffffff" icon="cog" onPress={() => router.push('/networking/settings')} />
+        </Appbar.Header>
 
-      <ScrollView
+        <ScrollView
         style={styles.scrollView}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[theme.colors.primary]}
-            tintColor={theme.colors.primary}
+            colors={["#C084FC"]}
+            tintColor="#C084FC"
           />
         }
       >
@@ -353,16 +371,17 @@ function NetworkingScreenContent() {
             matches.map(renderMatch)
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
 
-      <FAB
-        icon="account-search"
-        label="Find Matches"
-        onPress={handleFindNewMatches}
-        loading={loading}
-        style={styles.fab}
-      />
-    </View>
+        <FAB
+          icon="account-search"
+          label="Find Matches"
+          onPress={handleFindNewMatches}
+          loading={loading}
+          style={styles.fab}
+        />
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -378,6 +397,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  gradientBg: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
@@ -390,6 +412,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  enableCard: {
+    alignSelf: 'stretch',
+  },
   enableTitle: {
     textAlign: 'center',
     marginBottom: 16,
@@ -397,7 +422,6 @@ const styles = StyleSheet.create({
   enableDescription: {
     textAlign: 'center',
     marginBottom: 32,
-    opacity: 0.8,
   },
   featureList: {
     alignSelf: 'stretch',
@@ -409,13 +433,18 @@ const styles = StyleSheet.create({
   },
   featureItem: {
     marginBottom: 8,
-    opacity: 0.8,
   },
   enableButton: {
     paddingHorizontal: 24,
   },
   matchCard: {
     marginBottom: 16,
+  },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
   },
   matchHeader: {
     flexDirection: 'row',
@@ -485,5 +514,15 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 0,
+  },
+  glassHeader: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
 });

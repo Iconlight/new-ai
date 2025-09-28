@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, StyleSheet, RefreshControl, SafeAreaView, TouchableOpacity, ScrollView, PanResponder, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, useTheme, Button, Appbar, Drawer, IconButton, ActivityIndicator } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -261,22 +262,31 @@ export default function DiscoverScreen() {
   const currentTopics = activeTab === 'interests' ? todaysTopics : forYouTopics;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-        <Appbar.Action 
-          icon="menu" 
-          onPress={() => setDrawerOpen(true)}
-        />
-        <Appbar.Content title="ProactiveAI" />
-        <Appbar.Action 
-          icon="account-group" 
-          onPress={() => router.push('/networking')} 
-        />
-        <Appbar.Action 
-          icon="account" 
-          onPress={() => router.push('/profile')} 
-        />
-      </Appbar.Header>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]}>
+        <Appbar.Header style={styles.glassHeader}>
+          <Appbar.Action 
+            icon="menu" 
+            color="#ffffff"
+            onPress={() => setDrawerOpen(true)}
+          />
+          <Appbar.Content title="ProactiveAI" titleStyle={{ color: '#ffffff' }} />
+          <Appbar.Action 
+            icon="account-group"
+            color="#ffffff" 
+            onPress={() => router.push('/networking')} 
+          />
+          <Appbar.Action 
+            icon="account"
+            color="#ffffff" 
+            onPress={() => router.push('/profile')} 
+          />
+        </Appbar.Header>
 
       {/* Left-edge gesture catcher for opening the drawer */}
       <View
@@ -286,18 +296,22 @@ export default function DiscoverScreen() {
       />
 
       {/* Sticky Tab Bar */}
-      <View style={[styles.stickyTabs, { backgroundColor: theme.colors.surface }]}>
+      <View style={[styles.stickyTabs, styles.glassTabs]}>
         <View style={styles.tabRow}>
           <Button
             mode={activeTab === 'foryou' ? 'contained' : 'outlined'}
-            style={[styles.tabButton]}
+            style={[styles.tabButton, activeTab === 'foryou' ? styles.tabContained : styles.tabOutlined]}
+            buttonColor={activeTab === 'foryou' ? 'rgba(255,255,255,0.10)' : undefined}
+            textColor={activeTab === 'foryou' ? '#ffffff' : 'rgba(255,255,255,0.85)'}
             onPress={() => setActiveTab('foryou')}
           >
             For You
           </Button>
           <Button
             mode={activeTab === 'interests' ? 'contained' : 'outlined'}
-            style={[styles.tabButton]}
+            style={[styles.tabButton, activeTab === 'interests' ? styles.tabContained : styles.tabOutlined]}
+            buttonColor={activeTab === 'interests' ? 'rgba(255,255,255,0.10)' : undefined}
+            textColor={activeTab === 'interests' ? '#ffffff' : 'rgba(255,255,255,0.85)'}
             onPress={() => setActiveTab('interests')}
           >
             Interests
@@ -315,9 +329,9 @@ export default function DiscoverScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[theme.colors.primary]}
-            tintColor={theme.colors.primary}
-            progressBackgroundColor={theme.colors.surface}
+            colors={["#C084FC"]}
+            tintColor="#C084FC"
+            progressBackgroundColor={'rgba(255,255,255,0.08)'}
             progressViewOffset={0}
           />
         }
@@ -372,13 +386,12 @@ export default function DiscoverScreen() {
       <Animated.View style={[
         styles.drawer,
         { 
-          backgroundColor: theme.colors.surface,
           transform: [{ translateX: drawerTranslateX }]
         }
       ]} {...drawerPanResponder.panHandlers}>
         <View style={styles.drawerHeader}>
           <Text variant="titleLarge" style={styles.drawerTitle}>Menu</Text>
-          <IconButton icon="close" onPress={() => setDrawerOpen(false)} />
+          <IconButton icon="close" onPress={() => setDrawerOpen(false)} iconColor="#ffffff" />
         </View>
         
         {/* Networking Section */}
@@ -411,7 +424,7 @@ export default function DiscoverScreen() {
                   onPress={() => handleChatPress(chat.id)}
                   style={styles.chatItemButton}
                 >
-                  <Text variant="bodyMedium" style={[styles.chatItemText, { color: theme.colors.onSurface }]} numberOfLines={2}>
+                  <Text variant="bodyMedium" style={[styles.chatItemText]} numberOfLines={2}>
                     {chat.title || 'Untitled chat'}
                   </Text>
                 </TouchableOpacity>
@@ -442,15 +455,19 @@ export default function DiscoverScreen() {
         {/* Navigation loading overlay when opening chats from Discover */}
         {navLoading && (
           <View style={styles.navOverlay}>
-            <ActivityIndicator animating size="large" color={theme.colors.primary} />
+            <ActivityIndicator animating size="large" color="#C084FC" />
           </View>
         )}
     </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  gradientBg: {
     flex: 1,
   },
   stickyTabs: {
@@ -461,12 +478,29 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+  glassTabs: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 16,
+  },
   tabRow: {
     flexDirection: 'row',
     gap: 8,
   },
   tabButton: {
     flex: 1,
+  },
+  tabContained: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  tabOutlined: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'transparent',
   },
   scrollView: {
     flex: 1,
@@ -496,20 +530,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    borderWidth: 1,
   },
   bubbleLeft: {
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   bubbleRight: {
-    backgroundColor: 'rgba(0,122,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   bubbleTitle: {
     marginBottom: 6,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
   bubbleMessage: {
     lineHeight: 22,
     marginBottom: 8,
+    color: '#EDE9FE',
   },
   bubbleMeta: {
     flexDirection: 'row',
@@ -517,7 +556,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   metaText: {
-    opacity: 0.6,
+    color: 'rgba(237,233,254,0.8)',
   },
   emptyState: {
     flex: 1,
@@ -529,10 +568,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginBottom: 8,
     textAlign: 'center',
+    color: '#FFFFFF',
   },
   emptySubtitle: {
     textAlign: 'center',
-    opacity: 0.7,
+    color: 'rgba(237,233,254,0.8)',
   },
   drawer: {
     position: 'absolute',
@@ -546,6 +586,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     paddingBottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255,255,255,0.12)',
   },
   drawerHeader: {
     flexDirection: 'row',
@@ -557,6 +600,7 @@ const styles = StyleSheet.create({
   },
   drawerTitle: {
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   chatList: {
     flex: 1,
@@ -570,11 +614,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginHorizontal: 8,
     marginVertical: 4,
-    backgroundColor: 'rgba(0, 122, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     borderRadius: 8,
   },
   networkingText: {
     fontWeight: '500',
+    color: '#FFFFFF',
   },
   chatItemButton: {
     paddingHorizontal: 16,
@@ -584,15 +631,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: 'rgba(0, 122, 255, 0.7)',
+    borderLeftColor: '#C084FC',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
   },
   chatItemText: {
     lineHeight: 20,
+    color: '#FFFFFF',
   },
   noChatText: {
     textAlign: 'center',
     padding: 20,
-    opacity: 0.6,
+    color: 'rgba(237,233,254,0.8)',
   },
   overlay: {
     position: 'absolute',
@@ -631,5 +681,15 @@ const styles = StyleSheet.create({
   chatListContent: {
     paddingBottom: 20,
     paddingTop: 8,
+  },
+  glassHeader: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
 });

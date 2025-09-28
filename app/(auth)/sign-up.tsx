@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Text, TextInput, Surface } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -41,23 +42,26 @@ export default function SignUp() {
         'Account created successfully! Please check your email to verify your account.',
         [{ text: 'OK', onPress: () => router.push('/onboarding') }]
       );
-    }
-    
     setLoading(false);
   };
 
   return (
-    <View style={styles.container}>
-      <Surface style={styles.surface} elevation={2}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Create Account
-        </Text>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <View style={styles.container}> 
+        <Surface style={[styles.surface, styles.glassCard]} elevation={0}>
+          <Text variant="headlineMedium" style={[styles.title, { color: '#FFFFFF' }]}> 
+            Create Account
+          </Text>
         
         <TextInput
           label="Full Name"
           value={fullName}
           onChangeText={setFullName}
-          mode="outlined"
           style={styles.input}
         />
         
@@ -137,8 +141,9 @@ export default function SignUp() {
         >
           Already have an account? Sign In
         </Button>
-      </Surface>
-    </View>
+        </Surface>
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -149,15 +154,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  gradientBg: {
+    flex: 1,
+  },
   surface: {
     padding: 30,
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
   },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
   title: {
     marginBottom: 24,
     textAlign: 'center',
+    color: '#FFFFFF',
   },
   input: {
     marginBottom: 16,

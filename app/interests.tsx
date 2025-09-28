@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, Card, Button, Appbar, useTheme, Chip, TextInput, FAB } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -113,125 +114,129 @@ export default function InterestsScreen() {
       addInterest(newInterest, true);
     }
   };
-
   const availablePredefined = PREDEFINED_INTERESTS.filter(
     interest => !userInterests.some(ui => ui.interest === interest)
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="Manage Interests" />
-      </Appbar.Header>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
+        <Appbar.Header style={styles.glassHeader}>
+          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+          <Appbar.Content title="Manage Interests" titleStyle={{ color: '#ffffff' }} />
+        </Appbar.Header>
 
-      <ScrollView style={styles.content}>
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              Your Interests ({userInterests.length})
-            </Text>
-            
-            {userInterests.length > 0 ? (
-              <View style={styles.chipsContainer}>
-                {userInterests.map((interest) => (
-                  <Chip
-                    key={interest.id}
-                    mode="flat"
-                    onClose={() => removeInterest(interest.id)}
-                    style={[
-                      styles.chip,
-                      interest.is_custom && { backgroundColor: theme.colors.secondaryContainer }
-                    ]}
-                    closeIcon="close"
-                  >
-                    {interest.interest}
-                  </Chip>
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>
-                No interests added yet. Add some below to personalize your experience!
-              </Text>
-            )}
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              Add Custom Interest
-            </Text>
-            
-            <TextInput
-              mode="outlined"
-              label="Enter a custom interest"
-              value={newInterest}
-              onChangeText={setNewInterest}
-              onSubmitEditing={handleAddCustomInterest}
-              right={
-                <TextInput.Icon 
-                  icon="plus" 
-                  onPress={handleAddCustomInterest}
-                  disabled={!newInterest.trim() || saving}
-                />
-              }
-              style={styles.textInput}
-            />
-          </Card.Content>
-        </Card>
-
-        {availablePredefined.length > 0 && (
-          <Card style={styles.card}>
+        <ScrollView style={styles.content}>
+          <Card style={[styles.card, styles.glassCard]}>
             <Card.Content>
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                Suggested Interests
+              <Text variant="titleMedium" style={[styles.sectionTitle, { color: '#FFFFFF' }]}>
+                Your Interests ({userInterests.length})
               </Text>
-              
-              <View style={styles.chipsContainer}>
-                {availablePredefined.map((interest) => (
-                  <Chip
-                    key={interest}
-                    mode="outlined"
-                    onPress={() => addInterest(interest)}
-                    disabled={saving}
-                    style={styles.chip}
-                  >
-                    {interest}
-                  </Chip>
-                ))}
-              </View>
+              {userInterests.length > 0 ? (
+                <View style={styles.chipsContainer}>
+                  {userInterests.map((interest) => (
+                    <Chip
+                      key={interest.id}
+                      mode="flat"
+                      onClose={() => removeInterest(interest.id)}
+                      style={[
+                        styles.chip,
+                        interest.is_custom && { backgroundColor: theme.colors.secondaryContainer }
+                      ]}
+                      closeIcon="close"
+                    >
+                      {interest.interest}
+                    </Chip>
+                  ))}
+                </View>
+              ) : (
+                <Text style={[styles.emptyText, { color: 'rgba(237,233,254,0.8)' }]}>
+                  No interests added yet. Add some below to personalize your experience!
+                </Text>
+              )}
             </Card.Content>
           </Card>
-        )}
 
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              About Interests
-            </Text>
-            
-            <Text variant="bodyMedium" style={styles.infoText}>
-              • Interests help AI generate personalized conversation starters
-            </Text>
-            <Text variant="bodyMedium" style={styles.infoText}>
-              • They're used for networking compatibility matching
-            </Text>
-            <Text variant="bodyMedium" style={styles.infoText}>
-              • Custom interests allow for more specific personalization
-            </Text>
-            <Text variant="bodyMedium" style={styles.infoText}>
-              • You can add or remove interests anytime
-            </Text>
-          </Card.Content>
-        </Card>
-      </ScrollView>
-    </View>
+          <Card style={[styles.card, styles.glassCard]}>
+            <Card.Content>
+              <Text variant="titleMedium" style={[styles.sectionTitle, { color: '#FFFFFF' }] }>
+                Add Custom Interest
+              </Text>
+              <TextInput
+                mode="outlined"
+                label="Enter a custom interest"
+                value={newInterest}
+                onChangeText={setNewInterest}
+                onSubmitEditing={handleAddCustomInterest}
+                right={
+                  <TextInput.Icon 
+                    icon="plus" 
+                    onPress={handleAddCustomInterest}
+                    disabled={!newInterest.trim() || saving}
+                  />
+                }
+                style={styles.textInput}
+              />
+            </Card.Content>
+          </Card>
+
+          {availablePredefined.length > 0 && (
+            <Card style={[styles.card, styles.glassCard]}>
+              <Card.Content>
+                <Text variant="titleMedium" style={[styles.sectionTitle, { color: '#FFFFFF' }]}>
+                  Suggested Interests
+                </Text>
+                <View style={styles.chipsContainer}>
+                  {availablePredefined.map((interest) => (
+                    <Chip
+                      key={interest}
+                      mode="outlined"
+                      onPress={() => addInterest(interest)}
+                      disabled={saving}
+                      style={styles.chip}
+                    >
+                      {interest}
+                    </Chip>
+                  ))}
+                </View>
+              </Card.Content>
+            </Card>
+          )}
+
+          <Card style={[styles.card, styles.glassCard]}>
+            <Card.Content>
+              <Text variant="titleMedium" style={[styles.sectionTitle, { color: '#FFFFFF' }]}>
+                About Interests
+              </Text>
+              <Text variant="bodyMedium" style={[styles.infoText, { color: 'rgba(237,233,254,0.85)' }]}>
+                • Interests help AI generate personalized conversation starters
+              </Text>
+              <Text variant="bodyMedium" style={[styles.infoText, { color: 'rgba(237,233,254,0.85)' }]}>
+                • They're used for networking compatibility matching
+              </Text>
+              <Text variant="bodyMedium" style={[styles.infoText, { color: 'rgba(237,233,254,0.85)' }]}>
+                • Custom interests allow for more specific personalization
+              </Text>
+              <Text variant="bodyMedium" style={[styles.infoText, { color: 'rgba(237,233,254,0.85)' }]}>
+                • You can add or remove interests anytime
+              </Text>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </View>
+    </LinearGradient>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  gradientBg: {
     flex: 1,
   },
   content: {
@@ -240,6 +245,12 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
+  },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
   },
   sectionTitle: {
     fontWeight: '600',
@@ -265,5 +276,15 @@ const styles = StyleSheet.create({
   infoText: {
     marginBottom: 6,
     opacity: 0.8,
+  },
+  glassHeader: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
 });

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, Card, Button, Appbar, useTheme, Avatar } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -14,14 +15,20 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="Profile" />
-      </Appbar.Header>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
+        <Appbar.Header style={styles.glassHeader}>
+          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+          <Appbar.Content title="Profile" titleStyle={{ color: '#ffffff' }} />
+        </Appbar.Header>
 
-      <ScrollView style={styles.content}>
-        <Card style={styles.profileCard}>
+        <ScrollView style={styles.content}>
+        <Card style={[styles.profileCard, styles.glassCard]}>
           <Card.Content style={styles.profileContent}>
             <Avatar.Text 
               size={80} 
@@ -37,7 +44,7 @@ export default function ProfileScreen() {
           </Card.Content>
         </Card>
 
-        <Card style={styles.menuCard}>
+        <Card style={[styles.menuCard, styles.glassCard]}>
           <Card.Content>
             <Button
               mode="outlined"
@@ -55,18 +62,10 @@ export default function ProfileScreen() {
             >
               Manage Interests
             </Button>
-            <Button
-              mode="outlined"
-              onPress={() => router.push('/notifications')}
-              style={styles.menuButton}
-              icon="bell"
-            >
-              Notifications
-            </Button>
           </Card.Content>
         </Card>
 
-        <Card style={styles.menuCard}>
+        <Card style={[styles.menuCard, styles.glassCard]}>
           <Card.Content>
             <Button
               mode="contained"
@@ -78,13 +77,17 @@ export default function ProfileScreen() {
             </Button>
           </Card.Content>
         </Card>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  gradientBg: {
     flex: 1,
   },
   content: {
@@ -104,15 +107,27 @@ const styles = StyleSheet.create({
   name: {
     marginBottom: 8,
     textAlign: 'center',
+    color: '#FFFFFF',
   },
   email: {
-    opacity: 0.7,
     textAlign: 'center',
+    color: 'rgba(237,233,254,0.8)',
   },
   menuCard: {
     marginBottom: 16,
   },
   menuButton: {
     marginBottom: 8,
+  },
+  glassHeader: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
   },
 });

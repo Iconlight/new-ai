@@ -1,7 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
-import { Bubble, GiftedChat, IMessage } from 'react-native-gifted-chat';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Bubble, GiftedChat, InputToolbar, Send, Composer, IMessage } from 'react-native-gifted-chat';
+import { Ionicons } from '@expo/vector-icons';
 import { Appbar, useTheme } from 'react-native-paper';
 import MarkdownText from '../../../components/ui/MarkdownText';
 import { useAuth } from '../../../src/contexts/AuthContext';
@@ -131,10 +133,15 @@ export default function NetworkingChatScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title={otherUserName || 'Networking Chat'} />
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <Appbar.Header style={styles.glassHeader}>
+        <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+        <Appbar.Content title={otherUserName || 'Networking Chat'} titleStyle={{ color: '#ffffff' }} />
       </Appbar.Header>
 
       <KeyboardAvoidingView 
@@ -151,27 +158,79 @@ export default function NetworkingChatScreen() {
           renderAvatar={() => null}
           placeholder="Type your message..."
           alwaysShowSend
-          textInputStyle={{
-            backgroundColor: theme.colors.surface,
-            color: theme.colors.onSurface,
-            borderRadius: 20,
-            paddingHorizontal: 12,
-            paddingTop: 8,
-            paddingBottom: 8,
-            marginHorizontal: 8,
-          }}
-          containerStyle={{
-            backgroundColor: theme.colors.background,
-          }}
-          messagesContainerStyle={{
-            backgroundColor: theme.colors.background,
+          renderInputToolbar={(props) => (
+            <InputToolbar
+              {...props}
+              containerStyle={{
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                borderTopWidth: 0,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.12)',
+                marginHorizontal: 8,
+                marginBottom: 8,
+                borderRadius: 16,
+                overflow: 'hidden',
+              }}
+              primaryStyle={{ alignItems: 'center' }}
+            />
+          )}
+          renderComposer={(props) => (
+            <Composer
+              {...props}
+              textInputStyle={{
+                ...(props.textInputStyle as any),
+                flex: 1,
+                minHeight: 40,
+                maxHeight: 120,
+              }}
+            />
+          )}
+          renderSend={(props) => (
+            <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(192,132,252,0.22)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(192,132,252,0.55)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 6,
+                }}
+              >
+                <Ionicons name="send" size={18} color="#E9D5FF" />
+              </View>
+            </Send>
+          )}
+          messagesContainerStyle={{ backgroundColor: 'transparent' }}
+          textInputProps={{
+            placeholderTextColor: 'rgba(255,255,255,0.6)',
+            style: {
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              color: '#ffffff',
+              borderRadius: 20,
+              paddingHorizontal: 14,
+              paddingTop: 10,
+              paddingBottom: 10,
+              marginHorizontal: 8,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.16)',
+              shadowColor: '#000',
+              shadowOpacity: 0.25,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+            },
           }}
           renderBubble={(props) => {
             const isSystem = (props.currentMessage as any)?.system === true;
             if (isSystem) {
               return (
                 <View style={{
-                  backgroundColor: theme.colors.surfaceVariant,
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.12)',
                   padding: 12,
                   marginHorizontal: 16,
                   marginVertical: 8,
@@ -181,9 +240,9 @@ export default function NetworkingChatScreen() {
                 }}>
                   <MarkdownText
                     text={props.currentMessage?.text || ''}
-                    color={theme.colors.onSurface}
-                    codeBg={theme.colors.surface}
-                    codeColor={theme.colors.onSurface}
+                    color={'#EDE9FE'}
+                    codeBg={'rgba(255,255,255,0.08)'}
+                    codeColor={'#EDE9FE'}
                   />
                 </View>
               );
@@ -192,12 +251,20 @@ export default function NetworkingChatScreen() {
               <Bubble
                 {...props}
                 wrapperStyle={{
-                  right: { backgroundColor: theme.colors.primary },
-                  left: { backgroundColor: theme.colors.surfaceVariant },
+                  right: {
+                    backgroundColor: 'rgba(255,255,255,0.10)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.18)',
+                  },
+                  left: {
+                    backgroundColor: 'rgba(255,255,255,0.06)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.12)',
+                  },
                 }}
                 textStyle={{
-                  right: { color: theme.colors.onPrimary },
-                  left: { color: theme.colors.onSurface },
+                  right: { color: '#ffffff' },
+                  left: { color: '#EDE9FE' },
                 }}
               />
             );
@@ -207,8 +274,8 @@ export default function NetworkingChatScreen() {
             if (isSystem) return null; // System messages handled in renderBubble
             
             const isCurrentUser = props.currentMessage?.user?._id === user?.id;
-            const textColor = isCurrentUser ? theme.colors.onPrimary : theme.colors.onSurface;
-            const codeBg = isCurrentUser ? 'rgba(255,255,255,0.15)' : theme.colors.surface;
+            const textColor = isCurrentUser ? '#ffffff' : '#EDE9FE';
+            const codeBg = isCurrentUser ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)';
             return (
               <View style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
                 <MarkdownText
@@ -222,13 +289,26 @@ export default function NetworkingChatScreen() {
           }}
         />
       </KeyboardAvoidingView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  gradientBg: {
+    flex: 1,
+  },
+  glassHeader: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
   chatContainer: {
     flex: 1,

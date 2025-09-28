@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Easing } from 'react-native';
-import { Text, useTheme } from 'react-native-paper';
 import { Image } from 'expo-image';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Text, useTheme } from 'react-native-paper';
 
 interface AnimatedLoadingProps {
   message?: string;
@@ -15,10 +15,9 @@ export default function AnimatedLoading({
   const theme = useTheme();
   const opacityAnim = useRef(new Animated.Value(0.3)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Create a breathing/pulsing effect
+    // Create a breathing/pulsing effect (no rotation)
     const breathingAnimation = Animated.loop(
       Animated.sequence([
         Animated.parallel([
@@ -52,29 +51,13 @@ export default function AnimatedLoading({
       ])
     );
 
-    // Create a subtle rotation effect
-    const rotationAnimation = Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 8000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-
     breathingAnimation.start();
-    rotationAnimation.start();
-
     return () => {
       breathingAnimation.stop();
-      rotationAnimation.stop();
     };
-  }, [opacityAnim, scaleAnim, rotateAnim]);
+  }, [opacityAnim, scaleAnim]);
 
-  const rotateInterpolate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  // No rotation
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -120,7 +103,6 @@ export default function AnimatedLoading({
               opacity: opacityAnim,
               transform: [
                 { scale: scaleAnim },
-                { rotate: rotateInterpolate },
               ],
             },
           ]}

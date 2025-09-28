@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, Switch, Card, Button, Appbar, useTheme, Chip, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -67,25 +68,26 @@ export default function NetworkingSettingsScreen() {
     } catch (error) {
       console.error('Error saving settings:', error);
       Alert.alert('Error', 'An unexpected error occurred.');
-    } finally {
       setSaving(false);
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="Networking Settings" />
-      </Appbar.Header>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <View style={[styles.container, { backgroundColor: 'transparent' }]}>
+        <Appbar.Header style={styles.glassHeader}>
+          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+          <Appbar.Content title="Networking Settings" titleStyle={{ color: '#ffffff' }} />
+        </Appbar.Header>
 
-      <ScrollView style={styles.content}>
-        <Card style={styles.card}>
+        <ScrollView style={styles.content}>
+          <Card style={[styles.card, styles.glassCard]}>
           <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              Privacy & Visibility
-            </Text>
-            
             <View style={styles.settingRow}>
               <View style={styles.settingInfo}>
                 <Text variant="bodyLarge">Enable AI Networking</Text>
@@ -132,9 +134,9 @@ export default function NetworkingSettingsScreen() {
               </Chip>
             </View>
           </Card.Content>
-        </Card>
+          </Card>
 
-        <Card style={styles.card}>
+          <Card style={[styles.card, styles.glassCard]}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Matching Preferences
@@ -184,9 +186,9 @@ export default function NetworkingSettingsScreen() {
               />
             </View>
           </Card.Content>
-        </Card>
+          </Card>
 
-        <Card style={styles.card}>
+          <Card style={[styles.card, styles.glassCard]}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               How AI Networking Works
@@ -205,9 +207,9 @@ export default function NetworkingSettingsScreen() {
               • You control all connections and privacy settings
             </Text>
           </Card.Content>
-        </Card>
+          </Card>
 
-        <Button 
+          <Button 
           mode="contained" 
           onPress={handleSaveSettings}
           loading={saving}
@@ -215,14 +217,18 @@ export default function NetworkingSettingsScreen() {
           style={styles.saveButton}
         >
           Save Settings
-        </Button>
-      </ScrollView>
-    </View>
+          </Button>
+        </ScrollView>
+      </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  gradientBg: {
     flex: 1,
   },
   content: {
@@ -232,9 +238,16 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: 16,
   },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+  },
   sectionTitle: {
     fontWeight: '600',
     marginBottom: 16,
+    color: '#FFFFFF',
   },
   settingRow: {
     flexDirection: 'row',
@@ -256,7 +269,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     marginBottom: 8,
-    opacity: 0.8,
+    color: 'rgba(237,233,254,0.85)',
   },
   saveButton: {
     marginTop: 16,
@@ -264,5 +277,10 @@ const styles = StyleSheet.create({
   },
   segmentedContainer: {
     marginBottom: 16,
+  },
+  glassHeader: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
 });

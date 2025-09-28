@@ -23,5 +23,5 @@ export default function IndexScreen() {
     }
   }, [session, loading, needsOnboarding]);
 
-  return <AnimatedLoading message="Initializing ProactiveAI..." />;
+  return <AnimatedLoading message="" />;
 }

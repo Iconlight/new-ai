@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, Animated, BackHandler } from 'react-native';
-import { GiftedChat, Bubble, MessageText, IMessage } from 'react-native-gifted-chat';
+import { LinearGradient } from 'expo-linear-gradient';
+import { GiftedChat, Bubble, InputToolbar, Send, IMessage } from 'react-native-gifted-chat';
+import { Ionicons } from '@expo/vector-icons';
 import { Appbar, useTheme, ActivityIndicator } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useChat } from '../../../src/contexts/ChatContext';
@@ -54,16 +56,21 @@ export default function ChatScreen() {
   const renderAvatar = () => null; // Hide avatars for cleaner look
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-        <Appbar.BackAction onPress={() => {
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <Appbar.Header style={styles.glassHeader}>
+        <Appbar.BackAction color="#ffffff" onPress={() => {
           // Always navigate to discover page instead of using router.back()
           // This ensures consistent navigation behavior
           router.push('/discover');
         }} />
         <Appbar.Content 
           title={currentChat?.title || 'Chat'} 
-          titleStyle={{ color: theme.colors.onSurface }}
+          titleStyle={{ color: '#ffffff' }}
         />
       </Appbar.Header>
 
@@ -75,7 +82,7 @@ export default function ChatScreen() {
         {/* Loading overlay while opening chat */}
         {opening && !suppressOpeningOverlay && (
           <View style={styles.openingOverlay}>
-            <ActivityIndicator animating size="large" color={theme.colors.primary} />
+            <ActivityIndicator animating size="large" color="#C084FC" />
           </View>
         )}
         <Animated.View style={{
@@ -98,38 +105,86 @@ export default function ChatScreen() {
             keyboardShouldPersistTaps: 'always',
           }}
           bottomOffset={Platform.OS === 'ios' ? 0 : 8}
+          renderInputToolbar={(props) => (
+            <InputToolbar
+              {...props}
+              containerStyle={{
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                borderTopWidth: 0,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.12)',
+                marginHorizontal: 8,
+                marginBottom: 8,
+                borderRadius: 16,
+              }}
+              primaryStyle={{ alignItems: 'center' }}
+            />
+          )}
+          renderSend={(props) => (
+            <Send
+              {...props}
+              containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(192,132,252,0.22)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(192,132,252,0.55)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 6,
+                }}
+              >
+                <Ionicons name="send" size={18} color="#E9D5FF" />
+              </View>
+            </Send>
+          )}
           textInputStyle={{
-            backgroundColor: theme.colors.surface,
-            color: theme.colors.onSurface,
+            backgroundColor: 'rgba(255,255,255,0.08)',
+            color: '#ffffff',
             borderRadius: 20,
-            paddingHorizontal: 12,
-            paddingTop: 8,
-            paddingBottom: 8,
+            paddingHorizontal: 14,
+            paddingTop: 10,
+            paddingBottom: 10,
             marginHorizontal: 8,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.16)',
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
           }}
-          containerStyle={{
-            backgroundColor: theme.colors.background,
-          }}
-          messagesContainerStyle={{
-            backgroundColor: theme.colors.background,
-          }}
+          containerStyle={{ backgroundColor: 'transparent' }}
+          messagesContainerStyle={{ backgroundColor: 'transparent' }}
+          textInputProps={{ placeholderTextColor: 'rgba(255,255,255,0.6)' }}
           renderBubble={(props) => (
             <Bubble
               {...props}
               wrapperStyle={{
-                right: { backgroundColor: theme.colors.primary },
-                left: { backgroundColor: theme.colors.surfaceVariant },
+                right: {
+                  backgroundColor: 'rgba(255,255,255,0.10)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.18)',
+                },
+                left: {
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.12)',
+                },
               }}
               textStyle={{
-                right: { color: theme.colors.onPrimary },
-                left: { color: theme.colors.onSurface },
+                right: { color: '#ffffff' },
+                left: { color: '#EDE9FE' },
               }}
             />
           )}
           renderMessageText={(props) => {
             const isCurrentUser = props.currentMessage?.user._id === user?.id;
-            const textColor = isCurrentUser ? theme.colors.onPrimary : theme.colors.onSurface;
-            const codeBg = isCurrentUser ? 'rgba(255,255,255,0.15)' : theme.colors.surface;
+            const textColor = isCurrentUser ? '#ffffff' : '#EDE9FE';
+            const codeBg = isCurrentUser ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)';
             return (
               <View style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
                 <MarkdownText
@@ -144,13 +199,21 @@ export default function ChatScreen() {
         />
         </Animated.View>
       </KeyboardAvoidingView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  gradientBg: {
+    flex: 1,
+  },
+  glassHeader: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   chatContainer: {
     flex: 1,

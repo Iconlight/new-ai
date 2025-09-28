@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Text, TextInput, Surface } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -33,22 +34,26 @@ export default function SignIn() {
     } else {
       router.replace('/(tabs)');
     }
-    
     setLoading(false);
   };
 
   return (
-    <View style={styles.container}>
-      <Surface style={styles.surface} elevation={2}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Welcome Back
-        </Text>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <View style={styles.container}> 
+        <Surface style={[styles.surface, styles.glassCard]} elevation={0}>
+          <Text variant="headlineMedium" style={[styles.title, { color: '#FFFFFF' }]}> 
+            Welcome Back
+          </Text>
         
         <TextInput
           label="Email"
           value={email}
           onChangeText={setEmail}
-          mode="outlined"
           style={styles.input}
           keyboardType="email-address"
           autoCapitalize="none"
@@ -104,8 +109,9 @@ export default function SignIn() {
         >
           Don't have an account? Sign Up
         </Button>
-      </Surface>
-    </View>
+        </Surface>
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -116,15 +122,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  gradientBg: {
+    flex: 1,
+  },
   surface: {
     padding: 30,
     borderRadius: 16,
     width: '100%',
     maxWidth: 400,
   },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
   title: {
     marginBottom: 24,
     textAlign: 'center',
+    color: '#FFFFFF',
   },
   input: {
     marginBottom: 16,

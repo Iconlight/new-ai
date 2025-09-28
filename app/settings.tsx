@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, Switch, Card, Button, Appbar, useTheme, List } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -66,41 +67,45 @@ export default function SettingsScreen() {
       }
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred');
-    } finally {
       setSaving(false);
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header style={{ backgroundColor: theme.colors.surface }}>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="Settings" />
-      </Appbar.Header>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
+        <Appbar.Header style={styles.glassHeader}>
+          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+          <Appbar.Content title="Settings" titleStyle={{ color: '#ffffff' }} />
+        </Appbar.Header>
 
-      <ScrollView style={styles.content}>
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              Notifications
-            </Text>
-            
-            <List.Item
-              title="Push Notifications"
-              description="Receive daily conversation starters"
-              left={(props) => <List.Icon {...props} icon="bell" />}
-              right={() => (
-                <Switch
-                  value={preferences.notification_enabled}
-                  onValueChange={(value) => updatePreference('notification_enabled', value)}
-                  disabled={saving}
-                />
-              )}
-            />
-          </Card.Content>
-        </Card>
+        <ScrollView style={styles.content}>
+          <Card style={[styles.card, styles.glassCard]}>
+            <Card.Content>
+              <Text variant="titleMedium" style={styles.sectionTitle}>
+                Notifications
+              </Text>
+              <List.Item
+                title="Push Notifications"
+                description="Receive daily conversation starters"
+                left={(props) => <List.Icon {...props} icon="bell" />}
+                right={() => (
+                  <Switch
+                    value={preferences.notification_enabled}
+                    onValueChange={(value) => updatePreference('notification_enabled', value)}
+                    disabled={saving}
+                  />
+                )}
+              />
+            </Card.Content>
+          </Card>
 
-        <Card style={styles.card}>
+          <Card style={[styles.card, styles.glassCard]}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Conversation Preferences
@@ -112,9 +117,9 @@ export default function SettingsScreen() {
               left={(props) => <List.Icon {...props} icon="chat" />}
             />
           </Card.Content>
-        </Card>
+          </Card>
 
-        <Card style={styles.card}>
+          <Card style={[styles.card, styles.glassCard]}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Account
@@ -131,25 +136,21 @@ export default function SettingsScreen() {
             <List.Item
               title="AI Networking"
               description="Configure networking preferences"
-              left={(props) => <List.Icon {...props} icon="account-group" />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" />}
               onPress={() => router.push('/networking/settings')}
             />
           </Card.Content>
         </Card>
 
-        <Card style={styles.card}>
+        <Card style={[styles.card, styles.glassCard]}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               About
             </Text>
-            
             <List.Item
               title="ProactiveAI"
               description="Version 1.0.0"
               left={(props) => <List.Icon {...props} icon="information" />}
             />
-            
             <List.Item
               title="Privacy Policy"
               description="Learn about data handling"
@@ -160,14 +161,18 @@ export default function SettingsScreen() {
               }}
             />
           </Card.Content>
-        </Card>
-      </ScrollView>
-    </View>
+          </Card>
+        </ScrollView>
+      </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  gradientBg: {
     flex: 1,
   },
   content: {
@@ -177,8 +182,25 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: 16,
   },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+  },
   sectionTitle: {
     fontWeight: '600',
     marginBottom: 8,
+    color: '#FFFFFF',
+  },
+  glassHeader: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
 });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Text, Surface, Chip, TextInput } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -57,25 +58,29 @@ export default function Onboarding() {
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred');
       console.error('Error saving interests:', error);
-    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Surface style={styles.surface} elevation={2}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Tell us about your interests
-        </Text>
-        <Text variant="bodyLarge" style={styles.subtitle}>
-          This helps us create personalized conversations for you
-        </Text>
+    <LinearGradient
+      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientBg}
+    >
+      <ScrollView style={[styles.container, { backgroundColor: 'transparent' }] }>
+        <Surface style={[styles.surface, styles.glassCard]} elevation={0}>
+          <Text variant="headlineMedium" style={[styles.title, { color: '#FFFFFF' }]}> 
+            Tell us about your interests
+          </Text>
+          <Text variant="bodyLarge" style={[styles.subtitle, { color: 'rgba(237,233,254,0.8)' }]}> 
+            This helps us create personalized conversations for you
+          </Text>
 
-        <Text variant="titleMedium" style={styles.sectionTitle}>
+        <Text variant="titleMedium" style={[styles.sectionTitle, { color: '#FFFFFF' }]}> 
           Popular Interests
         </Text>
-        
         <View style={styles.chipContainer}>
           {PREDEFINED_INTERESTS.map(interest => (
             <Chip
@@ -141,8 +146,9 @@ export default function Onboarding() {
         >
           Continue
         </Button>
-      </Surface>
-    </ScrollView>
+        </Surface>
+      </ScrollView>
+    </LinearGradient>
   );
 }
 
@@ -151,23 +157,33 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  gradientBg: {
+    flex: 1,
+  },
   surface: {
     padding: 24,
     borderRadius: 16,
     marginBottom: 20,
   },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
   title: {
     marginBottom: 8,
     textAlign: 'center',
+    color: '#FFFFFF',
   },
   subtitle: {
     marginBottom: 32,
     textAlign: 'center',
-    opacity: 0.7,
+    color: 'rgba(237,233,254,0.8)',
   },
   sectionTitle: {
     marginTop: 24,
     marginBottom: 16,
+    color: '#FFFFFF',
   },
   chipContainer: {
     flexDirection: 'row',
