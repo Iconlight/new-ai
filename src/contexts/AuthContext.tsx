@@ -203,9 +203,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async () => {
     try {
-      // Complete any pending auth sessions (required for iOS)
-      WebBrowser.maybeCompleteAuthSession();
-
       // Create redirect URI using makeRedirectUri for better compatibility
       const redirectTo = makeRedirectUri({
         scheme: 'proactiveai',
@@ -235,17 +232,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       console.log('Opening OAuth URL:', data.url);
+      console.log('Expected redirect URI:', redirectTo);
 
-      // Open the OAuth URL - the auth-callback route will handle the response
+      // Open the OAuth URL and handle the response
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      
+      console.log('WebBrowser result:', { type: result.type, url: result.url || 'no url' });
       
       if (result.type === 'cancel') {
         return { error: 'Google sign-in cancelled' };
       }
+
+      if (result.type === 'success' && result.url) {
+        console.log('Exchanging code for session...');
+        
+        // Exchange the authorization code for a session
+        const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
+        
+        if (exchangeError) {
+          console.error('Error exchanging code for session:', exchangeError);
+          return { error: exchangeError.message };
+        }
+
+        if (sessionData?.session) {
+          console.log('Google session created successfully:', sessionData.session.user?.id);
+          // The auth state change listener will handle updating the context
+          return {};
+        } else {
+          return { error: 'Failed to create session' };
+        }
+      }
       
-      // If we get here, the auth-callback route will handle the rest
-      // The AuthContext will automatically update when the session changes
-      return {};
+      return { error: 'Authentication flow incomplete' };
     } catch (error) {
       console.error('Auth.signInWithGoogle network/unknown error:', error);
       return { error: error instanceof Error ? error.message : 'Network error during Google sign in' };

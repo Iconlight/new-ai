@@ -62,7 +62,18 @@ export default function SignUp() {
           label="Full Name"
           value={fullName}
           onChangeText={setFullName}
+          mode="outlined"
           style={styles.input}
+          theme={{
+            colors: {
+              primary: '#8B5CF6',
+              outline: 'rgba(255,255,255,0.3)',
+              onSurfaceVariant: 'rgba(255,255,255,0.7)',
+              onSurface: '#FFFFFF',
+              surface: 'rgba(255,255,255,0.08)',
+              surfaceVariant: 'rgba(255,255,255,0.08)',
+            }
+          }}
         />
         
         <TextInput
@@ -73,6 +84,16 @@ export default function SignUp() {
           style={styles.input}
           keyboardType="email-address"
           autoCapitalize="none"
+          theme={{
+            colors: {
+              primary: '#8B5CF6',
+              outline: 'rgba(255,255,255,0.3)',
+              onSurfaceVariant: 'rgba(255,255,255,0.7)',
+              onSurface: '#FFFFFF',
+              surface: 'rgba(255,255,255,0.08)',
+              surfaceVariant: 'rgba(255,255,255,0.08)',
+            }
+          }}
         />
         
         <TextInput
@@ -82,11 +103,22 @@ export default function SignUp() {
           mode="outlined"
           style={styles.input}
           secureTextEntry={!showPassword}
+          theme={{
+            colors: {
+              primary: '#8B5CF6',
+              outline: 'rgba(255,255,255,0.3)',
+              onSurfaceVariant: 'rgba(255,255,255,0.7)',
+              onSurface: '#FFFFFF',
+              surface: 'rgba(255,255,255,0.08)',
+              surfaceVariant: 'rgba(255,255,255,0.08)',
+            }
+          }}
           right={
             <TextInput.Icon
               icon={showPassword ? 'eye-off' : 'eye'}
               onPress={() => setShowPassword(v => !v)}
               forceTextInputFocus={false}
+              iconColor="rgba(255,255,255,0.7)"
             />
           }
         />
@@ -98,11 +130,22 @@ export default function SignUp() {
           mode="outlined"
           style={styles.input}
           secureTextEntry={!showConfirmPassword}
+          theme={{
+            colors: {
+              primary: '#8B5CF6',
+              outline: 'rgba(255,255,255,0.3)',
+              onSurfaceVariant: 'rgba(255,255,255,0.7)',
+              onSurface: '#FFFFFF',
+              surface: 'rgba(255,255,255,0.08)',
+              surfaceVariant: 'rgba(255,255,255,0.08)',
+            }
+          }}
           right={
             <TextInput.Icon
               icon={showConfirmPassword ? 'eye-off' : 'eye'}
               onPress={() => setShowConfirmPassword(v => !v)}
               forceTextInputFocus={false}
+              iconColor="rgba(255,255,255,0.7)"
             />
           }
         />
@@ -112,7 +155,9 @@ export default function SignUp() {
           onPress={handleSignUp}
           loading={loading}
           disabled={loading}
-          style={styles.button}
+          style={[styles.button, styles.primaryButton]}
+          buttonColor="#8B5CF6"
+          textColor="#FFFFFF"
         >
           Create Account
         </Button>
@@ -130,6 +175,8 @@ export default function SignUp() {
             }
           }}
           disabled={loading}
+          style={[styles.button, styles.outlinedButton]}
+          textColor="#FFFFFF"
         >
           Continue with Google
         </Button>
@@ -175,10 +222,26 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
   },
   button: {
     marginTop: 8,
     marginBottom: 16,
+    borderRadius: 12,
+  },
+  primaryButton: {
+    backgroundColor: '#8B5CF6',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  outlinedButton: {
+    borderColor: 'rgba(255,255,255,0.3)',
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   linkButton: {
     marginTop: 8,

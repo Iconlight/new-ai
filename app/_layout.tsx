@@ -5,6 +5,7 @@ import { PaperProvider } from 'react-native-paper';
 import { useColorScheme } from 'react-native';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as WebBrowser from 'expo-web-browser';
 
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { ChatProvider } from '../src/contexts/ChatContext';
@@ -14,6 +15,9 @@ import { lightTheme, darkTheme } from '../src/theme';
 export const unstable_settings = {
   initialRouteName: 'index',
 };
+
+// Complete any pending auth sessions once at app startup
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
