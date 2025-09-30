@@ -1,14 +1,17 @@
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Bubble, GiftedChat, InputToolbar, Send, Composer, IMessage } from 'react-native-gifted-chat';
-import { Ionicons } from '@expo/vector-icons';
+import { Bubble, GiftedChat, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
 import { Appbar, useTheme } from 'react-native-paper';
 import MarkdownText from '../../../components/ui/MarkdownText';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { getNetworkingConversationInfo, getNetworkingMessages, sendNetworkingMessage } from '../../../src/services/networking';
 import { supabase } from '../../../src/services/supabase';
+
+// Hide the native stack header; render our own Appbar.Header and ensure full-screen coverage
+export const options = { headerShown: false, presentation: 'fullScreenModal' } as const;
 
 export default function NetworkingChatScreen() {
   const theme = useTheme();
@@ -29,6 +32,19 @@ export default function NetworkingChatScreen() {
 
   const init = async () => {
     await Promise.all([loadMessages(), loadHeader()]);
+    // Mark all received messages as read on open
+    try {
+      if (conversationId && user?.id) {
+        await supabase
+          .from('networking_messages')
+          .update({ is_read: true })
+          .eq('conversation_id', String(conversationId))
+          .neq('sender_id', user.id)
+          .eq('is_read', false);
+      }
+    } catch (e) {
+      console.warn('[NetworkingChat] mark read failed:', (e as any)?.message || e);
+    }
     subscribeToMessages();
   };
 
@@ -88,7 +104,7 @@ export default function NetworkingChatScreen() {
         schema: 'public',
         table: 'networking_messages',
         filter: `conversation_id=eq.${conversationId}`,
-      }, (payload) => {
+      }, async (payload) => {
         const msg: any = payload.new;
         const isSystem = msg.message_type === 'system' || msg.message_type === 'starter';
         const gifted: IMessage = isSystem ? {
@@ -107,6 +123,17 @@ export default function NetworkingChatScreen() {
           },
         };
         setMessages(prev => GiftedChat.append(prev, [gifted]));
+
+        // If received from other user, mark as read immediately
+        try {
+          if (msg.sender_id !== user?.id) {
+            await supabase
+              .from('networking_messages')
+              .update({ is_read: true })
+              .eq('id', msg.id)
+              .eq('is_read', false);
+          }
+        } catch {}
       })
       .subscribe();
 
@@ -134,15 +161,17 @@ export default function NetworkingChatScreen() {
 
   return (
     <LinearGradient
-      colors={["#160427", "#2B0B5E", "#4C1D95"]}
+      colors={["#0B1023", "#2A0E43", "#5B21B6", "#9333EA"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientBg}
     >
-      <Appbar.Header style={styles.glassHeader}>
-        <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
-        <Appbar.Content title={otherUserName || 'Networking Chat'} titleStyle={{ color: '#ffffff' }} />
-      </Appbar.Header>
+      <View style={styles.glassHeaderCard}>
+        <Appbar.Header style={styles.glassHeaderInner}>
+          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+          <Appbar.Content title={otherUserName || 'Networking Chat'} titleStyle={{ color: '#ffffff' }} />
+        </Appbar.Header>
+      </View>
 
       <KeyboardAvoidingView 
         style={styles.chatContainer}
@@ -165,7 +194,7 @@ export default function NetworkingChatScreen() {
                 backgroundColor: 'rgba(255,255,255,0.06)',
                 borderTopWidth: 0,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.12)',
+                borderColor: 'rgba(255,255,255,0.14)',
                 marginHorizontal: 8,
                 marginBottom: 8,
                 borderRadius: 16,
@@ -174,55 +203,46 @@ export default function NetworkingChatScreen() {
               primaryStyle={{ alignItems: 'center' }}
             />
           )}
-          renderComposer={(props) => (
-            <Composer
-              {...props}
-              textInputStyle={{
-                ...(props.textInputStyle as any),
-                flex: 1,
-                minHeight: 40,
-                maxHeight: 120,
-              }}
-            />
-          )}
           renderSend={(props) => (
             <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
-              <View
+              <LinearGradient
+                colors={["#8B5CF6", "#EC4899"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={{
                   width: 36,
                   height: 36,
                   borderRadius: 12,
-                  backgroundColor: 'rgba(192,132,252,0.22)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(192,132,252,0.55)',
                   justifyContent: 'center',
                   alignItems: 'center',
                   marginRight: 6,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.35)'
                 }}
               >
-                <Ionicons name="send" size={18} color="#E9D5FF" />
-              </View>
+                <Ionicons name="send" size={18} color="#F5F3FF" />
+              </LinearGradient>
             </Send>
           )}
-          messagesContainerStyle={{ backgroundColor: 'transparent' }}
-          textInputProps={{
-            placeholderTextColor: 'rgba(255,255,255,0.6)',
-            style: {
-              backgroundColor: 'rgba(255,255,255,0.08)',
-              color: '#ffffff',
-              borderRadius: 20,
-              paddingHorizontal: 14,
-              paddingTop: 10,
-              paddingBottom: 10,
-              marginHorizontal: 8,
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.16)',
-              shadowColor: '#000',
-              shadowOpacity: 0.25,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-            },
+          textInputStyle={{
+            backgroundColor: 'rgba(255,255,255,0.08)',
+            color: '#ffffff',
+            borderRadius: 20,
+            paddingHorizontal: 14,
+            paddingTop: 10,
+            paddingBottom: 10,
+            marginHorizontal: 8,
+            borderWidth: 0,
+            borderRightWidth: 0,
+            borderColor: 'rgba(255,255,255,0.16)',
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 2 },
           }}
+          containerStyle={{ backgroundColor: 'transparent' }}
+          messagesContainerStyle={{ backgroundColor: 'transparent' }}
+          textInputProps={{ placeholderTextColor: 'rgba(255,255,255,0.6)' }}
           renderBubble={(props) => {
             const isSystem = (props.currentMessage as any)?.system === true;
             if (isSystem) {
@@ -252,19 +272,37 @@ export default function NetworkingChatScreen() {
                 {...props}
                 wrapperStyle={{
                   right: {
-                    backgroundColor: 'rgba(255,255,255,0.10)',
+                    backgroundColor: 'rgba(147,51,234,0.22)',
                     borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.18)',
+                    borderColor: 'rgba(168,85,247,0.65)',
+                    marginVertical: 3,
+                    shadowColor: '#8B5CF6',
+                    shadowOpacity: 0.35,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 3 },
                   },
                   left: {
-                    backgroundColor: 'rgba(255,255,255,0.06)',
+                    backgroundColor: 'rgba(59,130,246,0.18)',
                     borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.12)',
+                    borderColor: 'rgba(96,165,250,0.55)',
+                    marginVertical: 3,
+                    shadowColor: '#60A5FA',
+                    shadowOpacity: 0.25,
+                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 2 },
                   },
                 }}
+                containerToNextStyle={{
+                  right: { marginBottom: 2 },
+                  left: { marginBottom: 2 },
+                }}
+                containerToPreviousStyle={{
+                  right: { marginTop: 2 },
+                  left: { marginTop: 2 },
+                }}
                 textStyle={{
-                  right: { color: '#ffffff' },
-                  left: { color: '#EDE9FE' },
+                  right: { color: '#F5F3FF' },
+                  left: { color: '#E8ECFF' },
                 }}
               />
             );
@@ -274,8 +312,8 @@ export default function NetworkingChatScreen() {
             if (isSystem) return null; // System messages handled in renderBubble
             
             const isCurrentUser = props.currentMessage?.user?._id === user?.id;
-            const textColor = isCurrentUser ? '#ffffff' : '#EDE9FE';
-            const codeBg = isCurrentUser ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)';
+            const textColor = isCurrentUser ? '#F5F3FF' : '#E8ECFF';
+            const codeBg = isCurrentUser ? 'rgba(139,92,246,0.25)' : 'rgba(59,130,246,0.18)';
             return (
               <View style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
                 <MarkdownText
@@ -300,15 +338,21 @@ const styles = StyleSheet.create({
   gradientBg: {
     flex: 1,
   },
-  glassHeader: {
+  glassHeaderCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderBottomWidth: 1,
+    borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
     borderRadius: 16,
     marginHorizontal: 12,
     marginTop: 12,
     marginBottom: 8,
     overflow: 'hidden',
+  },
+  glassHeaderInner: {
+    backgroundColor: 'transparent',
+    elevation: 0,
+    shadowOpacity: 0,
+    borderBottomWidth: 0,
   },
   chatContainer: {
     flex: 1,

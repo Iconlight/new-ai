@@ -9,10 +9,13 @@ export default function AuthCallbackScreen() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Extract code from URL params
+        // Extract all relevant params from URL
         const code = params.code as string;
         const error = params.error as string;
         const errorDescription = params.error_description as string;
+        const state = params.state as string;
+
+        console.log('Auth callback params:', { code: !!code, error, state: !!state });
 
         if (error) {
           console.error('OAuth error:', error, errorDescription);
@@ -33,14 +36,30 @@ export default function AuthCallbackScreen() {
           return;
         }
 
-        console.log('Exchanging code for session...');
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        console.log('Exchanging code for session with PKCE...');
         
-        if (exchangeError) {
-          console.error('Code exchange error:', exchangeError);
+        // For React Native, we need to reconstruct the URL with all params
+        const baseUrl = 'proactiveai://auth-callback';
+        const urlParams = new URLSearchParams();
+        
+        // Add all received params to reconstruct the full callback URL
+        Object.entries(params).forEach(([key, value]) => {
+          if (value && typeof value === 'string') {
+            urlParams.append(key, value);
+          }
+        });
+        
+        const fullUrl = `${baseUrl}?${urlParams.toString()}`;
+        console.log('Reconstructed callback URL for session exchange');
+        
+        // Use getSessionFromUrl which handles PKCE properly
+        const sessionResult = await supabase.auth.getSessionFromUrl({ url: fullUrl });
+        
+        if (sessionResult.error) {
+          console.error('Session exchange error:', sessionResult.error);
           router.replace({
             pathname: '/(auth)/sign-in',
-            params: { error: exchangeError.message }
+            params: { error: sessionResult.error.message }
           });
           return;
         }

@@ -206,8 +206,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Complete any pending auth sessions (required for iOS)
       WebBrowser.maybeCompleteAuthSession();
 
-      // Use a simple deep link that works reliably with Expo
-      const redirectTo = 'proactiveai://auth-callback';
+      // Create redirect URI using makeRedirectUri for better compatibility
+      const redirectTo = makeRedirectUri({
+        scheme: 'proactiveai',
+        path: 'auth-callback',
+      });
       console.log('Auth.signInWithGoogle redirect:', redirectTo);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -215,6 +218,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         options: {
           redirectTo,
           skipBrowserRedirect: true,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
 

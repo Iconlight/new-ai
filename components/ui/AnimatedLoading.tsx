@@ -6,11 +6,13 @@ import { Text, useTheme } from 'react-native-paper';
 interface AnimatedLoadingProps {
   message?: string;
   size?: number;
+  transparentBackground?: boolean;
 }
 
 export default function AnimatedLoading({ 
   message = "Loading...", 
-  size = 120 
+  size = 120,
+  transparentBackground = false,
 }: AnimatedLoadingProps) {
   const theme = useTheme();
   const opacityAnim = useRef(new Animated.Value(0.3)).current;
@@ -60,7 +62,7 @@ export default function AnimatedLoading({
   // No rotation
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: transparentBackground ? 'transparent' : theme.colors.background }]}>
       <View style={styles.iconContainer}>
         {/* Outer glow effect */}
         <Animated.View
@@ -108,7 +110,7 @@ export default function AnimatedLoading({
           ]}
         >
           <Image
-            source={require('../../assets/images/icon.png')}
+            source={require('../../assets/images/loading.png')}
             style={[
               styles.icon,
               {

@@ -1,13 +1,15 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, StyleSheet, RefreshControl, SafeAreaView, TouchableOpacity, ScrollView, PanResponder, Animated } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Text, useTheme, Button, Appbar, Drawer, IconButton, ActivityIndicator } from 'react-native-paper';
-import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, PanResponder, RefreshControl, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Appbar, Button, IconButton, Text, useTheme } from 'react-native-paper';
+import AnimatedLoading from '../components/ui/AnimatedLoading';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useChat } from '../src/contexts/ChatContext';
-import { markProactiveTopicAsSent, clearProactiveCache } from '../src/services/proactiveAI';
-import { getActiveFeedTopics, refreshInterestsFeed, refreshForYouFeed } from '../src/services/feedService';
+import { getActiveFeedTopics, refreshForYouFeed, refreshInterestsFeed } from '../src/services/feedService';
+import { clearProactiveCache, markProactiveTopicAsSent } from '../src/services/proactiveAI';
+import { supabase } from '../src/services/supabase';
 import { ProactiveTopic } from '../src/types';
 
 export default function DiscoverScreen() {
@@ -22,10 +24,45 @@ export default function DiscoverScreen() {
   const [navLoading, setNavLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'foryou' | 'interests'>('foryou');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [unreadNetworkingCount, setUnreadNetworkingCount] = useState(0);
   const drawerTranslateX = useRef(new Animated.Value(-300)).current;
 
   // Helper: only UUIDs correspond to DB-backed proactive_topics
   const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
+  // Load unread networking messages count
+  const loadUnreadNetworkingCount = async () => {
+    if (!user?.id) return;
+    try {
+      // Get all conversations where user is a participant
+      const { data: conversations } = await supabase
+        .from('networking_conversations')
+        .select('id')
+        .or(`user_id_1.eq.${user.id},user_id_2.eq.${user.id}`);
+      
+      if (!conversations || conversations.length === 0) {
+        setUnreadNetworkingCount(0);
+        return;
+      }
+      
+      const conversationIds = conversations.map(c => c.id);
+      
+      // Count unread messages from other users in these conversations
+      const { count, error } = await supabase
+        .from('networking_messages')
+        .select('id', { count: 'exact' })
+        .in('conversation_id', conversationIds)
+        .neq('sender_id', user.id)
+        .eq('is_read', false);
+      
+      if (!error) {
+        setUnreadNetworkingCount(count || 0);
+      }
+    } catch (error) {
+      console.error('Error loading unread networking count:', error);
+      setUnreadNetworkingCount(0);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -45,10 +82,32 @@ export default function DiscoverScreen() {
       if (user?.id) {
         console.log('[Discover] Refreshing chats for user:', user.id);
         refreshChats();
+        loadUnreadNetworkingCount();
       }
       return () => {};
     }, [user?.id])
   );
+
+  // Subscribe to realtime updates for networking messages
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const channel = supabase
+      .channel('discover-networking-unread')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'networking_messages'
+      }, () => {
+        // Reload count when any networking message changes
+        loadUnreadNetworkingCount();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   // Refresh chats when opening the drawer so list is current
   useEffect(() => {
@@ -276,11 +335,26 @@ export default function DiscoverScreen() {
             onPress={() => setDrawerOpen(true)}
           />
           <Appbar.Content title="ProactiveAI" titleStyle={{ color: '#ffffff' }} />
-          <Appbar.Action 
-            icon="account-group"
-            color="#ffffff" 
-            onPress={() => router.push('/networking')} 
-          />
+          <View style={{ position: 'relative' }}>
+            <Appbar.Action 
+              icon="account-group"
+              color="#ffffff" 
+              onPress={() => router.push('/networking')} 
+            />
+            {unreadNetworkingCount > 0 && (
+              <View style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                width: 12,
+                height: 12,
+                borderRadius: 6,
+                backgroundColor: '#EF4444',
+                borderWidth: 2,
+                borderColor: '#160427',
+              }} />
+            )}
+          </View>
           <Appbar.Action 
             icon="account"
             color="#ffffff" 
@@ -402,7 +476,17 @@ export default function DiscoverScreen() {
           }}
           style={styles.networkingItem}
         >
-          <Text variant="bodyLarge" style={styles.networkingText}>🤝 AI Networking</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text variant="bodyLarge" style={styles.networkingText}>🤝 AI Networking</Text>
+            {unreadNetworkingCount > 0 && (
+              <View style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: '#EF4444',
+              }} />
+            )}
+          </View>
         </TouchableOpacity>
         
         <View style={[styles.drawerHeader, { paddingTop: 16 }]}>
@@ -455,7 +539,7 @@ export default function DiscoverScreen() {
         {/* Navigation loading overlay when opening chats from Discover */}
         {navLoading && (
           <View style={styles.navOverlay}>
-            <ActivityIndicator animating size="large" color="#C084FC" />
+            <AnimatedLoading transparentBackground size={96} message="" />
           </View>
         )}
     </SafeAreaView>

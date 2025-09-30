@@ -1,14 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, Animated, BackHandler } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { GiftedChat, Bubble, InputToolbar, Send, IMessage } from 'react-native-gifted-chat';
 import { Ionicons } from '@expo/vector-icons';
-import { Appbar, useTheme, ActivityIndicator } from 'react-native-paper';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useChat } from '../../../src/contexts/ChatContext';
-import { useAuth } from '../../../src/contexts/AuthContext';
-import MarkdownText from '../../../components/ui/MarkdownText';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, BackHandler, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Bubble, GiftedChat, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
+import { Appbar, useTheme } from 'react-native-paper';
+import AnimatedLoading from '../../../components/ui/AnimatedLoading';
+import MarkdownText from '../../../components/ui/MarkdownText';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { useChat } from '../../../src/contexts/ChatContext';
 
 export default function ChatScreen() {
   const theme = useTheme();
@@ -62,17 +63,19 @@ export default function ChatScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.gradientBg}
     >
-      <Appbar.Header style={styles.glassHeader}>
-        <Appbar.BackAction color="#ffffff" onPress={() => {
-          // Always navigate to discover page instead of using router.back()
-          // This ensures consistent navigation behavior
-          router.push('/discover');
-        }} />
-        <Appbar.Content 
-          title={currentChat?.title || 'Chat'} 
-          titleStyle={{ color: '#ffffff' }}
-        />
-      </Appbar.Header>
+      <View style={styles.glassHeaderCard}>
+        <Appbar.Header style={styles.glassHeaderInner}>
+          <Appbar.BackAction color="#ffffff" onPress={() => {
+            // Always navigate to discover page instead of using router.back()
+            // This ensures consistent navigation behavior
+            router.push('/discover');
+          }} />
+          <Appbar.Content 
+            title={currentChat?.title || 'Chat'} 
+            titleStyle={{ color: '#ffffff' }}
+          />
+        </Appbar.Header>
+      </View>
 
       <KeyboardAvoidingView 
         style={styles.chatContainer}
@@ -82,7 +85,7 @@ export default function ChatScreen() {
         {/* Loading overlay while opening chat */}
         {opening && !suppressOpeningOverlay && (
           <View style={styles.openingOverlay}>
-            <ActivityIndicator animating size="large" color="#C084FC" />
+            <AnimatedLoading transparentBackground size={96} message="" />
           </View>
         )}
         <Animated.View style={{
@@ -101,10 +104,11 @@ export default function ChatScreen() {
           renderAvatar={renderAvatar}
           placeholder="Type a message..."
           alwaysShowSend
+          minComposerHeight={36}
+          maxComposerHeight={90}
           listViewProps={{
             keyboardShouldPersistTaps: 'always',
           }}
-          bottomOffset={Platform.OS === 'ios' ? 0 : 8}
           renderInputToolbar={(props) => (
             <InputToolbar
               {...props}
@@ -113,18 +117,16 @@ export default function ChatScreen() {
                 borderTopWidth: 0,
                 borderWidth: 1,
                 borderColor: 'rgba(255,255,255,0.12)',
-                marginHorizontal: 8,
+                marginHorizontal: 0,
                 marginBottom: 8,
                 borderRadius: 16,
+                overflow: 'hidden',
               }}
               primaryStyle={{ alignItems: 'center' }}
             />
           )}
           renderSend={(props) => (
-            <Send
-              {...props}
-              containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}
-            >
+            <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
               <View
                 style={{
                   width: 36,
@@ -142,24 +144,28 @@ export default function ChatScreen() {
               </View>
             </Send>
           )}
-          textInputStyle={{
-            backgroundColor: 'rgba(255,255,255,0.08)',
-            color: '#ffffff',
-            borderRadius: 20,
-            paddingHorizontal: 14,
-            paddingTop: 10,
-            paddingBottom: 10,
-            marginHorizontal: 8,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.16)',
-            shadowColor: '#000',
-            shadowOpacity: 0.25,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
+          textInputProps={{
+            placeholderTextColor: 'rgba(255,255,255,0.6)',
+            style: {
+              flex: 1,
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              color: '#ffffff',
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingTop: 5,
+              paddingBottom: 5,
+              marginHorizontal: 0,
+              borderWidth: 0,
+              borderRightWidth: 0,
+              borderColor: 'transparent',
+              shadowColor: '#000',
+              shadowOpacity: 0.25,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+            },
           }}
           containerStyle={{ backgroundColor: 'transparent' }}
           messagesContainerStyle={{ backgroundColor: 'transparent' }}
-          textInputProps={{ placeholderTextColor: 'rgba(255,255,255,0.6)' }}
           renderBubble={(props) => (
             <Bubble
               {...props}
@@ -210,10 +216,21 @@ const styles = StyleSheet.create({
   gradientBg: {
     flex: 1,
   },
-  glassHeader: {
+  glassHeaderCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderBottomWidth: 1,
+    borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  glassHeaderInner: {
+    backgroundColor: 'transparent',
+    elevation: 0,
+    shadowOpacity: 0,
+    borderBottomWidth: 0,
   },
   chatContainer: {
     flex: 1,
