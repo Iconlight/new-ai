@@ -1,20 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Text, Card, Button, Chip, useTheme, Appbar, FAB, Avatar, SegmentedButtons, Badge } from 'react-native-paper';
 import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Appbar, Avatar, Badge, Button, Card, Chip, FAB, SegmentedButtons, Text, useTheme } from 'react-native-paper';
+import { ErrorBoundary, NetworkingErrorFallback } from '../src/components/ErrorBoundary';
 import { useAuth } from '../src/contexts/AuthContext';
-import { 
-  NetworkingMatch, 
-  findNewMatches, 
-  getUserMatches, 
-  acceptMatch, 
+import {
+  NetworkingMatch,
+  acceptMatch,
   declineMatch,
   enableNetworking,
+  findNewMatches,
   getConversationIdByMatchId,
+  getUserMatches,
 } from '../src/services/networking';
 import { supabase } from '../src/services/supabase';
-import { ErrorBoundary, NetworkingErrorFallback } from '../src/components/ErrorBoundary';
 
 function NetworkingScreenContent() {
   const theme = useTheme();
@@ -441,7 +442,22 @@ function NetworkingScreenContent() {
       >
         <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
           <Appbar.Header style={styles.glassHeader}>
-            <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+            <BlurView intensity={40} tint="dark" style={styles.headerBlur} pointerEvents="none" />
+            <Appbar.BackAction 
+              color="#ffffff" 
+              onPress={() => router.back()} 
+              size={28}
+              style={[
+                styles.headerIcon, 
+                { 
+                  backgroundColor: 'rgba(255,255,255,0.06)', 
+                  borderRadius: 12,
+                  borderWidth: 0,
+                  borderColor: 'rgba(255,255,255,0.12)',
+                  marginLeft: 6,
+                }
+              ]}
+            />
             <Appbar.Content title="AI Networking" titleStyle={{ color: '#ffffff' }} />
           </Appbar.Header>
 
@@ -495,7 +511,22 @@ function NetworkingScreenContent() {
     >
       <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
         <Appbar.Header style={styles.glassHeader}>
-          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
+          <BlurView intensity={40} tint="dark" style={styles.headerBlur} pointerEvents="none" />
+          <Appbar.BackAction 
+            color="#ffffff" 
+            onPress={() => router.back()} 
+            size={28}
+            style={[
+              styles.headerIcon, 
+              { 
+                backgroundColor: 'rgba(255,255,255,0.06)', 
+                borderRadius: 12,
+                borderWidth: 0,
+                borderColor: 'rgba(255,255,255,0.12)',
+                marginLeft: 6,
+              }
+            ]}
+          />
           <Appbar.Content title="AI Networking" titleStyle={{ color: '#ffffff' }} />
           <Appbar.Action color="#ffffff" icon="cog" onPress={() => router.push('/networking/settings')} />
         </Appbar.Header>
@@ -591,6 +622,32 @@ const styles = StyleSheet.create({
   },
   gradientBg: {
     flex: 1,
+  },
+  decorOrbs: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  orbA: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    top: -60,
+    left: -40,
+    opacity: 0.35,
+  },
+  orbB: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    bottom: -80,
+    right: -50,
+    opacity: 0.28,
   },
   scrollView: {
     flex: 1,
@@ -741,5 +798,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
     overflow: 'hidden',
+    position: 'relative',
+  },
+  headerBlur: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  headerIcon: {
+    zIndex: 2,
   },
 });

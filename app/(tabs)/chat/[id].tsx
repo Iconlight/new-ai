@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
@@ -64,6 +65,7 @@ export default function ChatScreen() {
       style={styles.gradientBg}
     >
       <View style={styles.glassHeaderCard}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
         <Appbar.Header style={styles.glassHeaderInner}>
           <Appbar.BackAction color="#ffffff" onPress={() => {
             // Always navigate to discover page instead of using router.back()
@@ -110,38 +112,34 @@ export default function ChatScreen() {
             keyboardShouldPersistTaps: 'always',
           }}
           renderInputToolbar={(props) => (
-            <InputToolbar
-              {...props}
-              containerStyle={{
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                borderTopWidth: 0,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.12)',
-                marginHorizontal: 0,
-                marginBottom: 8,
-                borderRadius: 16,
-                overflow: 'hidden',
-              }}
-              primaryStyle={{ alignItems: 'center' }}
-            />
+            <View style={styles.inputToolbarWrapper}>
+              <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+              <InputToolbar
+                {...props}
+                containerStyle={styles.inputToolbarContainer}
+                primaryStyle={{ alignItems: 'center' }}
+              />
+            </View>
           )}
           renderSend={(props) => (
             <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
-              <View
+              <LinearGradient
+                colors={["#8B5CF6", "#EC4899"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={{
                   width: 36,
                   height: 36,
                   borderRadius: 12,
-                  backgroundColor: 'rgba(192,132,252,0.22)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(192,132,252,0.55)',
                   justifyContent: 'center',
                   alignItems: 'center',
                   marginRight: 6,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.35)'
                 }}
               >
-                <Ionicons name="send" size={18} color="#E9D5FF" />
-              </View>
+                <Ionicons name="send" size={18} color="#F5F3FF" />
+              </LinearGradient>
             </Send>
           )}
           textInputProps={{
@@ -171,19 +169,29 @@ export default function ChatScreen() {
               {...props}
               wrapperStyle={{
                 right: {
-                  backgroundColor: 'rgba(255,255,255,0.10)',
+                  backgroundColor: 'rgba(147,51,234,0.22)',
                   borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.18)',
+                  borderColor: 'rgba(168,85,247,0.65)',
+                  marginVertical: 3,
+                  shadowColor: '#8B5CF6',
+                  shadowOpacity: 0.35,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 3 },
                 },
                 left: {
-                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  backgroundColor: 'rgba(59,130,246,0.18)',
                   borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.12)',
+                  borderColor: 'rgba(96,165,250,0.55)',
+                  marginVertical: 3,
+                  shadowColor: '#60A5FA',
+                  shadowOpacity: 0.25,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 2 },
                 },
               }}
               textStyle={{
-                right: { color: '#ffffff' },
-                left: { color: '#EDE9FE' },
+                right: { color: '#F5F3FF' },
+                left: { color: '#E8ECFF' },
               }}
             />
           )}
@@ -216,6 +224,14 @@ const styles = StyleSheet.create({
   gradientBg: {
     flex: 1,
   },
+  decorOrbs: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
   glassHeaderCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
@@ -231,6 +247,24 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
     borderBottomWidth: 0,
+  },
+  orbA: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    top: -60,
+    left: -40,
+    opacity: 0.35,
+  },
+  orbB: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    bottom: -80,
+    right: -50,
+    opacity: 0.28,
   },
   chatContainer: {
     flex: 1,
@@ -252,6 +286,19 @@ const styles = StyleSheet.create({
   },
   messageText: {
     flex: 1,
+  },
+  inputToolbarWrapper: {
+    marginHorizontal: 0,
+    marginBottom: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(16,16,24,0.28)',
+  },
+  inputToolbarContainer: {
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
   },
 });
 

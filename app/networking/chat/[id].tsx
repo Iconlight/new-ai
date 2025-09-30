@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
@@ -167,6 +168,7 @@ export default function NetworkingChatScreen() {
       style={styles.gradientBg}
     >
       <View style={styles.glassHeaderCard}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
         <Appbar.Header style={styles.glassHeaderInner}>
           <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
           <Appbar.Content title={otherUserName || 'Networking Chat'} titleStyle={{ color: '#ffffff' }} />
@@ -188,20 +190,14 @@ export default function NetworkingChatScreen() {
           placeholder="Type your message..."
           alwaysShowSend
           renderInputToolbar={(props) => (
-            <InputToolbar
-              {...props}
-              containerStyle={{
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                borderTopWidth: 0,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.14)',
-                marginHorizontal: 8,
-                marginBottom: 8,
-                borderRadius: 16,
-                overflow: 'hidden',
-              }}
-              primaryStyle={{ alignItems: 'center' }}
-            />
+            <View style={styles.inputToolbarWrapper}>
+              <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+              <InputToolbar
+                {...props}
+                containerStyle={styles.inputToolbarContainer}
+                primaryStyle={{ alignItems: 'center' }}
+              />
+            </View>
           )}
           renderSend={(props) => (
             <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
@@ -338,6 +334,14 @@ const styles = StyleSheet.create({
   gradientBg: {
     flex: 1,
   },
+  decorOrbs: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
   glassHeaderCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
@@ -354,7 +358,38 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     borderBottomWidth: 0,
   },
+  orbA: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    top: -60,
+    left: -40,
+    opacity: 0.35,
+  },
+  orbB: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    bottom: -80,
+    right: -50,
+    opacity: 0.28,
+  },
   chatContainer: {
     flex: 1,
+  },
+  inputToolbarWrapper: {
+    marginHorizontal: 8,
+    marginBottom: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(16,16,24,0.28)',
+  },
+  inputToolbarContainer: {
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
   },
 });

@@ -1,5 +1,6 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, RefreshControl, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -329,6 +330,7 @@ export default function DiscoverScreen() {
     >
       <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]}>
         <Appbar.Header style={styles.glassHeader}>
+          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
           <Appbar.Action 
             icon="menu" 
             color="#ffffff"
@@ -371,6 +373,7 @@ export default function DiscoverScreen() {
 
       {/* Sticky Tab Bar */}
       <View style={[styles.stickyTabs, styles.glassTabs]}>
+        <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={styles.tabRow}>
           <Button
             mode={activeTab === 'foryou' ? 'contained' : 'outlined'}
@@ -553,6 +556,32 @@ const styles = StyleSheet.create({
   },
   gradientBg: {
     flex: 1,
+  },
+  decorOrbs: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  orbA: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    top: -60,
+    left: -40,
+    opacity: 0.35,
+  },
+  orbB: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    bottom: -80,
+    right: -50,
+    opacity: 0.28,
   },
   stickyTabs: {
     paddingHorizontal: 16,
