@@ -5,6 +5,7 @@ import { User } from '../types';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import { Linking } from 'react-native';
+import Constants from 'expo-constants';
 
 interface AuthContextType {
   session: Session | null;
@@ -77,9 +78,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isMounted) {
         setSession(session);
         if (session?.user) {
+          console.log('[Auth] Fetching user profile after auth state change...');
+          setLoading(true); // Keep loading true while fetching profile
           await fetchUserProfile(session.user);
+          console.log('[Auth] Profile fetch completed');
         } else {
           setUser(null);
+          setNeedsOnboarding(false);
           setLoading(false);
         }
       }
@@ -120,11 +125,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (authUser: SupabaseUser) => {
     try {
+      console.log('[Auth] === FETCH USER PROFILE START ===');
       console.log('[Auth] Fetching profile for user:', authUser.id);
+      console.log('[Auth] User email:', authUser.email);
       
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000)
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) =>
+        setTimeout(() => {
+          console.error('[Auth] Profile fetch timeout after 10 seconds');
+          resolve({ data: null, error: { code: 'TIMEOUT', message: 'Profile fetch timeout' } });
+        }, 10000)
       );
       
       const fetchPromise = supabase
@@ -132,18 +142,81 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select('*')
         .eq('id', authUser.id)
         .single();
-
-      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+      
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      console.log('[Auth] Profile query completed. Error:', error?.message || 'none', 'Data:', data ? 'found' : 'not found');
 
       if (error) {
+        // Handle timeout - profile might exist but query timed out
+        if (error.code === 'TIMEOUT') {
+          console.error('[Auth] Database query timed out. Setting minimal user data and allowing sign-in...');
+          
+          // Set minimal user data from auth metadata
+          const minimalUser = {
+            id: authUser.id,
+            email: authUser.email || '',
+            full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || 'User',
+            avatar_url: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          
+          setUser(minimalUser as any);
+          setNeedsOnboarding(true); // Assume needs onboarding if we can't check
+          setLoading(false);
+          return;
+        }
+        
+        // Profile doesn't exist (first-time Google sign-in)
+        if (error.code === 'PGRST116') {
+          console.log('[Auth] Profile not found, creating new profile...');
+          
+          // Create profile from auth metadata
+          const fullName = authUser.user_metadata?.full_name || 
+                          authUser.user_metadata?.name || 
+                          authUser.email?.split('@')[0] || 
+                          'User';
+          
+          const { data: newProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authUser.id,
+              email: authUser.email,
+              full_name: fullName,
+              avatar_url: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture,
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('[Auth] Error creating profile:', createError);
+            setLoading(false);
+            return;
+          }
+          
+          console.log('[Auth] Profile created successfully:', fullName);
+          setUser(newProfile);
+          
+          // Check onboarding status for new profile
+          const needsOnboarding = await checkOnboardingStatus();
+          console.log('[Auth] New user needs onboarding:', needsOnboarding);
+          setNeedsOnboarding(needsOnboarding);
+          setLoading(false);
+          return;
+        }
+        
         console.error('[Auth] Error fetching profile:', error);
-        // Still set loading to false even if profile fetch fails
         setLoading(false);
-      } else if (data) {
+        return;
+      }
+
+      if (data) {
         console.log('[Auth] Profile fetched successfully:', data.full_name || data.email);
         setUser(data);
         // Check if user needs onboarding
         const needsOnboarding = await checkOnboardingStatus();
+        console.log('[Auth] Existing user needs onboarding:', needsOnboarding);
         setNeedsOnboarding(needsOnboarding);
         setLoading(false);
       } else {
@@ -203,12 +276,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async () => {
     try {
-      // Create redirect URI using makeRedirectUri for better compatibility
+      // Determine the correct redirect URI based on environment
+      // For Expo Go: use native scheme, for standalone: use custom scheme
+      const isExpoGo = Constants.appOwnership === 'expo';
+      
       const redirectTo = makeRedirectUri({
-        scheme: 'proactiveai',
+        scheme: isExpoGo ? undefined : 'proactiveai', // undefined uses native Expo Go scheme
         path: 'auth-callback',
       });
-      console.log('Auth.signInWithGoogle redirect:', redirectTo);
+      
+      console.log('=== GOOGLE AUTH DEBUG ===');
+      console.log('Environment:', isExpoGo ? 'Expo Go' : 'Standalone');
+      console.log('Redirect URI:', redirectTo);
+      console.log('========================');
+      console.log('⚠️ IMPORTANT: Add this URL to Supabase Dashboard:');
+      console.log('   Authentication > URL Configuration > Redirect URLs');
+      console.log('   Add:', redirectTo);
+      console.log('========================');
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -235,31 +319,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Expected redirect URI:', redirectTo);
 
       // Open the OAuth URL and handle the response
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectTo,
+        {
+          showInRecents: true,
+          preferEphemeralSession: false, // Use persistent session for better compatibility
+        }
+      );
       
-      console.log('WebBrowser result:', { type: result.type, url: result.url || 'no url' });
+      console.log('WebBrowser result type:', result.type);
+      if (result.type === 'success') {
+        console.log('WebBrowser result URL:', result.url);
+      }
       
-      if (result.type === 'cancel') {
-        return { error: 'Google sign-in cancelled' };
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        console.log('User cancelled or dismissed the sign-in');
+        return { error: 'Google sign-in was cancelled' };
       }
 
-      if (result.type === 'success' && result.url) {
-        console.log('Exchanging code for session...');
+      if (result.type === 'success') {
+        console.log('Processing OAuth response...');
         
-        // Exchange the authorization code for a session
-        const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
+        // With implicit flow, tokens are in the URL hash or query params
+        const url = new URL(result.url);
+        const accessToken = url.searchParams.get('access_token') || 
+                           url.hash.match(/access_token=([^&]+)/)?.[1];
+        const refreshToken = url.searchParams.get('refresh_token') || 
+                            url.hash.match(/refresh_token=([^&]+)/)?.[1];
         
-        if (exchangeError) {
-          console.error('Error exchanging code for session:', exchangeError);
-          return { error: exchangeError.message };
-        }
+        if (accessToken) {
+          console.log('Setting session with access token...');
+          
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+          });
+          
+          if (sessionError) {
+            console.error('Error setting session:', sessionError);
+            return { error: sessionError.message };
+          }
 
-        if (sessionData?.session) {
-          console.log('Google session created successfully:', sessionData.session.user?.id);
-          // The auth state change listener will handle updating the context
-          return {};
+          if (sessionData?.session) {
+            console.log('Google session created successfully:', sessionData.session.user?.id);
+            return {};
+          }
         } else {
-          return { error: 'Failed to create session' };
+          console.error('No access token in OAuth response');
+          return { error: 'Failed to get access token from Google' };
         }
       }
       

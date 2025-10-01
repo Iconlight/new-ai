@@ -118,7 +118,9 @@ export default function SignIn() {
             if (error) {
               Alert.alert('Google Sign-In Error', error);
             } else {
-              router.replace('/(tabs)');
+              // Let the auth state change handle navigation
+              // This will check onboarding status and redirect appropriately
+              router.replace('/');
             }
           }}
           disabled={loading}

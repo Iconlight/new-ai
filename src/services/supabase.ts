@@ -47,6 +47,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-    flowType: 'pkce',
+    flowType: 'implicit', // Use implicit flow for React Native (PKCE has issues with WebCrypto)
   },
 });
