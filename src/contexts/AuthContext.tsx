@@ -150,7 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         // Handle timeout - profile might exist but query timed out
         if (error.code === 'TIMEOUT') {
-          console.error('[Auth] Database query timed out. Setting minimal user data and allowing sign-in...');
+          console.error('[Auth] Profile query timed out. Trying to check onboarding status...');
           
           // Set minimal user data from auth metadata
           const minimalUser = {
@@ -163,7 +163,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           
           setUser(minimalUser as any);
-          setNeedsOnboarding(true); // Assume needs onboarding if we can't check
+          
+          // Try to check if user has interests (this query might succeed even if profile query timed out)
+          try {
+            const needsOnboarding = await checkOnboardingStatus();
+            console.log('[Auth] Onboarding check after timeout:', needsOnboarding);
+            setNeedsOnboarding(needsOnboarding);
+          } catch (err) {
+            console.error('[Auth] Onboarding check also failed, assuming needs onboarding');
+            setNeedsOnboarding(true);
+          }
+          
           setLoading(false);
           return;
         }
