@@ -3,33 +3,24 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Resolve Node.js core modules to empty modules for React Native
-// This prevents the ws package from trying to import Node.js modules
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  // List of Node.js core modules that ws tries to import
-  const nodeModules = [
-    'http',
-    'https',
-    'net',
-    'tls',
-    'fs',
-    'stream',
-    'zlib',
-    'crypto',
-    'url',
-    'buffer',
-    'events',
-  ];
-
-  // If ws is trying to import a Node.js core module, return an empty module
-  if (nodeModules.includes(moduleName)) {
-    return {
-      type: 'empty',
-    };
-  }
-
-  // Otherwise, use the default resolver
-  return context.resolveRequest(context, moduleName, platform);
+// Add extra node modules that need to be resolved as empty
+config.resolver.extraNodeModules = {
+  http: require.resolve('stream-http'),
+  https: require.resolve('https-browserify'),
+  stream: require.resolve('stream-browserify'),
+  crypto: require.resolve('expo-crypto'),
+  url: require.resolve('url'),
+  buffer: require.resolve('buffer'),
+  events: require.resolve('events'),
+  // Server-only modules that should be empty
+  net: false,
+  tls: false,
+  fs: false,
+  zlib: false,
+  dns: false,
+  child_process: false,
+  readline: false,
+  repl: false,
 };
 
 module.exports = config;

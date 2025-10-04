@@ -6,6 +6,8 @@ export interface PushMessage {
   data?: Record<string, any>;
   sound?: 'default' | null;
   priority?: 'default' | 'normal' | 'high';
+  icon?: string; // Path to notification icon
+  image?: string; // Large image for notification
 }
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
@@ -15,6 +17,9 @@ const isExpoPushToken = (token: string) => token.startsWith('ExponentPushToken['
 
 export const sendPushToUser = async (userId: string, message: PushMessage): Promise<{ success: boolean; sent: number; errors?: any[] }> => {
   try {
+    console.log(`[push] Attempting to send push to user ${userId}`);
+    console.log(`[push] Message:`, { title: message.title, body: message.body?.substring(0, 50) });
+    
     // Fetch active tokens for the user
     const { data: tokens, error } = await supabase
       .from('user_push_tokens')
@@ -27,11 +32,15 @@ export const sendPushToUser = async (userId: string, message: PushMessage): Prom
       return { success: false, sent: 0, errors: [error] };
     }
 
+    console.log(`[push] Found ${tokens?.length || 0} tokens for user ${userId}`);
+
     const validTokens = (tokens || []).map(t => t.push_token).filter((t): t is string => !!t && isExpoPushToken(t));
     if (validTokens.length === 0) {
-      console.log(`[push] No valid active tokens for user ${userId}`);
+      console.warn(`[push] No valid active tokens for user ${userId}`);
       return { success: true, sent: 0 };
     }
+
+    console.log(`[push] ${validTokens.length} valid Expo push tokens found`);
 
     // Expo recommends batching up to 100 messages per request
     const chunks: string[][] = [];
@@ -43,14 +52,31 @@ export const sendPushToUser = async (userId: string, message: PushMessage): Prom
     let sentCount = 0;
 
     for (const chunk of chunks) {
-      const payload = chunk.map(token => ({
-        to: token,
-        title: message.title,
-        body: message.body,
-        data: message.data || {},
-        sound: message.sound ?? 'default',
-        priority: message.priority ?? 'high',
-      }));
+      const payload = chunk.map(token => {
+        const notification: any = {
+          to: token,
+          title: message.title,
+          body: message.body,
+          data: message.data || {},
+          sound: message.sound ?? 'default',
+          priority: message.priority ?? 'high',
+        };
+        
+        // Add icon if provided (for Android)
+        if (message.icon) {
+          notification.android = {
+            icon: message.icon,
+            color: '#8B5CF6', // Purple color matching app theme
+          };
+        }
+        
+        // Add image if provided
+        if (message.image) {
+          notification.image = message.image;
+        }
+        
+        return notification;
+      });
 
       const response = await fetch(EXPO_PUSH_ENDPOINT, {
         method: 'POST',

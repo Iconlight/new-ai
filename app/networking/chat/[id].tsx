@@ -28,6 +28,20 @@ export default function NetworkingChatScreen() {
     if (conversationId && user) {
       init();
     }
+    
+    // Cleanup: mark messages as read when leaving the chat
+    return () => {
+      if (conversationId && user?.id) {
+        supabase
+          .from('networking_messages')
+          .update({ is_read: true })
+          .eq('conversation_id', String(conversationId))
+          .neq('sender_id', user.id)
+          .eq('is_read', false)
+          .then(() => console.log('[NetworkingChat] Marked remaining messages as read on unmount'))
+          .catch(e => console.warn('[NetworkingChat] Failed to mark as read on unmount:', e));
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, user?.id]);
 

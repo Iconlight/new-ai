@@ -92,6 +92,13 @@ export const scheduleDailyNotifications = async (conversationStarters: string[])
               notificationTime: scheduledTime.toISOString(),
               index: i
             },
+            sound: 'default',
+            ...(Platform.OS === 'android' && {
+              android: {
+                icon: './assets/images/notification-icon.png',
+                color: '#8B5CF6',
+              },
+            }),
           },
           trigger: {
             type: 'timeInterval',

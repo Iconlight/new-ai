@@ -24,13 +24,14 @@ function NetworkingScreenContent() {
   const [connectedMatches, setConnectedMatches] = useState<NetworkingMatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [networkingEnabled, setNetworkingEnabled] = useState(false);
+  const [networkingEnabled, setNetworkingEnabled] = useState<boolean | null>(null); // null = checking
   const [activeTab, setActiveTab] = useState('discover');
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [lastActivity, setLastActivity] = useState<Record<string, string>>({}); // conversationId -> ISO string
 
   useEffect(() => {
     if (user) {
+      checkNetworkingStatus(); // Check first
       loadMatches();
     }
   }, [user]);
@@ -431,6 +432,22 @@ function NetworkingScreenContent() {
       </Card.Content>
     </Card>
   );
+
+  // Show loading while checking networking status
+  if (networkingEnabled === null) {
+    return (
+      <LinearGradient
+        colors={["#160427", "#2B0B5E", "#4C1D95"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientBg}
+      >
+        <View style={[styles.container, { backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={{ color: '#FFFFFF' }}>Loading...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
 
   if (!networkingEnabled) {
     return (

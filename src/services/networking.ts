@@ -823,31 +823,52 @@ const sendNetworkingMessageNotification = async (
   content: string
 ): Promise<void> => {
   try {
+    console.log(`[Notification] Starting notification for conversation ${conversationId}, sender ${senderId}`);
+    
     // Get conversation details to find the recipient
-    const { data: conversation } = await supabase
+    const { data: conversation, error: convError } = await supabase
       .from('networking_conversations')
       .select('user_id_1, user_id_2')
       .eq('id', conversationId)
       .single();
 
-    if (!conversation) return;
+    if (convError) {
+      console.error('[Notification] Error fetching conversation:', convError);
+      return;
+    }
+
+    if (!conversation) {
+      console.warn('[Notification] Conversation not found:', conversationId);
+      return;
+    }
 
     // Determine recipient (the user who is NOT the sender)
     const recipientId = conversation.user_id_1 === senderId 
       ? conversation.user_id_2 
       : conversation.user_id_1;
 
+    console.log(`[Notification] Recipient determined: ${recipientId}`);
+
     // Get sender's profile for the notification
     const senderProfile = await fetchDisplayProfile(senderId, conversationId);
+    console.log(`[Notification] Sender profile: ${senderProfile.name}`);
     
-    // Check if recipient has notifications enabled
-    const { data: preferences } = await supabase
+    // Check if recipient has notifications enabled (check both tables for compatibility)
+    const { data: preferences, error: prefError } = await supabase
       .from('user_preferences')
       .select('notification_enabled')
       .eq('user_id', recipientId)
-      .single();
+      .maybeSingle();
 
-    if (preferences?.notification_enabled === false) return;
+    if (prefError) {
+      console.warn('[Notification] Error fetching preferences (continuing anyway):', prefError);
+    }
+
+    // If explicitly disabled, don't send
+    if (preferences?.notification_enabled === false) {
+      console.log('[Notification] User has notifications disabled');
+      return;
+    }
 
     // Send a remote push notification to the recipient device(s)
     const { sendPushToUser } = await import('./push');
@@ -871,6 +892,7 @@ const sendNetworkingMessageNotification = async (
       },
       priority: 'high',
       sound: 'default',
+      icon: './assets/images/notification-icon.png', // Custom notification icon
     });
 
     console.log(`Push notification attempted to ${recipientId}: sent=${result.sent}, success=${result.success}`);

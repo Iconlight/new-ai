@@ -16,6 +16,8 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "^2.39.0",
+    "buffer": "^6.0.3",
+    "events": "^3.3.0",
     "expo": "~54.0.7",
     "expo-auth-session": "~5.5.2",
     "expo-blur": "~15.0.7",
@@ -36,6 +38,7 @@
     "expo-symbols": "~1.0.7",
     "expo-system-ui": "~6.0.7",
     "expo-web-browser": "~15.0.7",
+    "https-browserify": "^1.0.0",
     "openai": "^4.28.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -50,6 +53,9 @@
     "react-native-vector-icons": "^10.0.3",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "url": "^0.11.4",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
