@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
-import { Bubble, GiftedChat, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
+import React, { useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { Bubble, GiftedChat, IMessage, InputToolbar, Send, Message } from 'react-native-gifted-chat';
 import { Appbar, useTheme } from 'react-native-paper';
+
 import MarkdownText from '../../../components/ui/MarkdownText';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { getNetworkingConversationInfo, getNetworkingMessages, sendNetworkingMessage } from '../../../src/services/networking';
@@ -24,43 +25,100 @@ export default function NetworkingChatScreen() {
     (typeof routeName === 'string' && routeName.length > 0) ? routeName : 'Networking Chat'
   );
 
+  const unsubscribeRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     if (conversationId && user) {
+      // Start realtime first to catch UPDATE events triggered by mark-as-read
+      unsubscribeRef.current = subscribeToMessages();
+      // Then load messages/header and mark-as-read
       init();
     }
     
-    // Cleanup: mark messages as read when leaving the chat
+    // Cleanup: unsubscribe and mark messages as read when leaving the chat
     return () => {
+      try { unsubscribeRef.current(); } catch {}
       if (conversationId && user?.id) {
-        supabase
-          .from('networking_messages')
-          .update({ is_read: true })
-          .eq('conversation_id', String(conversationId))
-          .neq('sender_id', user.id)
-          .eq('is_read', false)
-          .then(() => console.log('[NetworkingChat] Marked remaining messages as read on unmount'))
-          .catch(e => console.warn('[NetworkingChat] Failed to mark as read on unmount:', e));
+        (async () => {
+          try {
+            await supabase
+              .from('networking_messages')
+              .update({ is_read: true })
+              .eq('conversation_id', String(conversationId))
+              .neq('sender_id', user.id)
+              .eq('is_read', false);
+            console.log('[NetworkingChat] Marked remaining messages as read on unmount');
+          } catch (err) {
+            console.warn('[NetworkingChat] Failed to mark as read on unmount:', (err as any)?.message || err);
+          }
+        })();
       }
     };
+
+  // Web fallback: poll for new messages every 3s
+  useEffect(() => {
+    if (!conversationId || !user) return;
+    if (Platform.OS !== 'web') return;
+    let timer: any;
+    let mounted = true;
+    const seen = new Set<string>();
+    // seed with current IDs to avoid duplication
+    messages.forEach(m => seen.add(String(m._id)));
+    const poll = async () => {
+      try {
+        const { messages: list } = await getNetworkingMessages(conversationId as string);
+        if (!mounted) return;
+        const newOnes = list.filter((m: any) => !seen.has(String(m.id)));
+        if (newOnes.length) {
+          const mapped: IMessage[] = newOnes.map((msg: any) => ({
+            _id: msg.id,
+            text: msg.content,
+            createdAt: new Date(msg.created_at),
+            user: { _id: msg.sender_id, name: msg.sender_id === user.id ? 'You' : otherUserName },
+            sent: msg.sender_id === user.id ? true : undefined,
+            received: msg.sender_id === user.id ? Boolean(msg.is_read) : undefined,
+          }));
+          setMessages(prev => GiftedChat.append(prev, mapped));
+          newOnes.forEach((m: any) => seen.add(String(m.id)));
+        }
+      } catch {}
+    };
+    timer = setInterval(poll, 3000);
+    // immediate first poll
+    poll();
+    return () => {
+      mounted = false;
+      if (timer) clearInterval(timer);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, user?.id, Platform.OS]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, user?.id]);
 
   const init = async () => {
     await Promise.all([loadMessages(), loadHeader()]);
-    // Mark all received messages as read on open
+    // Then mark all received messages as read (this will trigger UPDATE events)
     try {
       if (conversationId && user?.id) {
-        await supabase
+        console.log('[NetworkingChat] Marking messages as read for conversation:', conversationId);
+        
+        const { data, error } = await supabase
           .from('networking_messages')
           .update({ is_read: true })
           .eq('conversation_id', String(conversationId))
           .neq('sender_id', user.id)
-          .eq('is_read', false);
+          .eq('is_read', false)
+          .select();
+        
+        if (error) {
+          console.error('[NetworkingChat] Error marking as read:', error);
+        } else {
+          console.log(`[NetworkingChat] Marked ${data?.length || 0} messages as read`);
+        }
       }
     } catch (e) {
       console.warn('[NetworkingChat] mark read failed:', (e as any)?.message || e);
     }
-    subscribeToMessages();
   };
 
   const loadHeader = async () => {
@@ -91,6 +149,7 @@ export default function NetworkingChatScreen() {
             user: { _id: 'system' }, // Required by IMessage interface
           } as IMessage;
         }
+        const isOutgoing = msg.sender_id === user?.id;
         return {
           _id: msg.id,
           text: msg.content,
@@ -99,6 +158,9 @@ export default function NetworkingChatScreen() {
             _id: msg.sender_id,
             name: msg.sender_id === user?.id ? 'You' : otherUserName,
           },
+          // Ticks: mark sent for our messages; mark received if the other user has read it
+          sent: isOutgoing ? true : undefined,
+          received: isOutgoing ? Boolean(msg.is_read) : undefined,
         } as IMessage;
       }).reverse();
 
@@ -110,8 +172,9 @@ export default function NetworkingChatScreen() {
     }
   };
 
-  const subscribeToMessages = () => {
-    if (!conversationId) return;
+  const subscribeToMessages = (): () => void => {
+    if (!conversationId) return () => {};
+    console.log('[NetworkingChat] Subscribing to realtime for conversation:', conversationId);
     const channel = supabase
       .channel(`rt-networking-messages-${conversationId}`)
       .on('postgres_changes', {
@@ -121,6 +184,7 @@ export default function NetworkingChatScreen() {
         filter: `conversation_id=eq.${conversationId}`,
       }, async (payload) => {
         const msg: any = payload.new;
+        console.log('[NetworkingChat] INSERT message event:', msg?.id);
         const isSystem = msg.message_type === 'system' || msg.message_type === 'starter';
         const gifted: IMessage = isSystem ? {
           _id: msg.id,
@@ -136,6 +200,7 @@ export default function NetworkingChatScreen() {
             _id: msg.sender_id,
             name: msg.sender_id === user?.id ? 'You' : otherUserName,
           },
+          sent: msg.sender_id === user?.id ? true : undefined,
         };
         setMessages(prev => GiftedChat.append(prev, [gifted]));
 
@@ -149,6 +214,49 @@ export default function NetworkingChatScreen() {
               .eq('is_read', false);
           }
         } catch {}
+      })
+      // Fallback: broad INSERT listener (no filter). Safeguard in case filter doesn't fire on web
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'networking_messages',
+      }, async (payload) => {
+        const msg: any = payload.new;
+        if (!msg || String(msg.conversation_id) !== String(conversationId)) return;
+        console.log('[NetworkingChat] INSERT (fallback) message event:', msg?.id);
+        const isSystem = msg.message_type === 'system' || msg.message_type === 'starter';
+        const gifted: IMessage = isSystem ? {
+          _id: msg.id,
+          text: msg.content,
+          createdAt: new Date(msg.created_at),
+          system: true,
+          user: { _id: 'system' },
+        } : {
+          _id: msg.id,
+          text: msg.content,
+          createdAt: new Date(msg.created_at),
+          user: { _id: msg.sender_id, name: msg.sender_id === user?.id ? 'You' : otherUserName },
+          sent: msg.sender_id === user?.id ? true : undefined,
+        };
+        setMessages(prev => GiftedChat.append(prev, [gifted]));
+        try {
+          if (msg.sender_id !== user?.id) {
+            await supabase.from('networking_messages').update({ is_read: true }).eq('id', msg.id).eq('is_read', false);
+          }
+        } catch {}
+      })
+      // Listen for read status updates to update ticks on our sent messages
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'networking_messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      }, (payload) => {
+        const msg: any = payload.new;
+        console.log('[NetworkingChat] UPDATE message event:', msg?.id, 'is_read:', msg?.is_read);
+        if (msg.sender_id === user?.id && msg.is_read) {
+          setMessages(prev => prev.map(m => m._id === msg.id ? { ...m, received: true } : m));
+        }
       })
       .subscribe();
 
@@ -203,6 +311,118 @@ export default function NetworkingChatScreen() {
           renderAvatar={() => null}
           placeholder="Type your message..."
           alwaysShowSend
+          // Ensure no container indentation by overriding Message container
+          renderMessage={(props) => (
+            <Message
+              {...props}
+              containerStyle={{
+                left: { marginLeft: 0, paddingLeft: 0 },
+                right: { marginRight: 0, paddingRight: 0 },
+              }}
+            />
+          )}
+          // Ensure bubbles do not indent when grouping; align to edges and add ticks
+          renderBubble={(props) => {
+            const isSystem = (props.currentMessage as any)?.system === true;
+            if (isSystem) {
+              return (
+                <View style={{
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.12)',
+                  padding: 12,
+                  marginHorizontal: 16,
+                  marginVertical: 8,
+                  borderRadius: 12,
+                  alignSelf: 'center',
+                  maxWidth: '90%',
+                }}>
+                  <MarkdownText
+                    text={props.currentMessage?.text || ''}
+                    color={'#EDE9FE'}
+                    codeBg={'rgba(255,255,255,0.08)'}
+                    codeColor={'#EDE9FE'}
+                  />
+                </View>
+              );
+            }
+            return (
+              <Bubble
+                {...props}
+                containerStyle={{
+                  left: { marginLeft: 0, alignItems: 'flex-start' },
+                  right: { marginRight: 0, alignItems: 'flex-end' },
+                }}
+                wrapperStyle={{
+                  right: {
+                    backgroundColor: 'rgba(147,51,234,0.22)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(168,85,247,0.65)',
+                    marginVertical: 3,
+                    shadowColor: '#8B5CF6',
+                    shadowOpacity: 0.35,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 3 },
+                  },
+                  left: {
+                    backgroundColor: 'rgba(59,130,246,0.18)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(96,165,250,0.55)',
+                    marginVertical: 3,
+                    shadowColor: '#60A5FA',
+                    shadowOpacity: 0.25,
+                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 2 },
+                  },
+                }}
+                textStyle={{
+                  right: { color: '#F5F3FF' },
+                  left: { color: '#E8ECFF' },
+                }}
+                containerToNextStyle={{
+                  left: { marginLeft: 0 },
+                  right: { marginRight: 0 },
+                }}
+                containerToPreviousStyle={{
+                  left: { marginLeft: 0 },
+                  right: { marginRight: 0 },
+                }}
+                renderTicks={(currentMessage?: IMessage) => {
+                  if (!currentMessage || currentMessage.user?._id !== user?.id) return null;
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4 }}>
+                      <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 10 }}>
+                        {currentMessage?.received ? '✓✓' : currentMessage?.sent ? '✓' : ''}
+                      </Text>
+                    </View>
+                  );
+                }}
+              />
+            );
+          }}
+          textInputProps={{
+            placeholderTextColor: 'rgba(255,255,255,0.6)',
+            style: {
+              flex: 1,
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              color: '#ffffff',
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingTop: 5,
+              paddingBottom: 5,
+              marginHorizontal: 0,
+              borderWidth: 0,
+              borderRightWidth: 0,
+              borderColor: 'transparent',
+              shadowColor: '#000',
+              shadowOpacity: 0.25,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+            }
+          }}
+          minComposerHeight={36}
+          maxComposerHeight={90}
+          listViewProps={{ keyboardShouldPersistTaps: 'always' } as any}
           renderInputToolbar={(props) => (
             <View style={styles.inputToolbarWrapper}>
               <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
@@ -234,89 +454,6 @@ export default function NetworkingChatScreen() {
               </LinearGradient>
             </Send>
           )}
-          textInputStyle={{
-            backgroundColor: 'rgba(255,255,255,0.08)',
-            color: '#ffffff',
-            borderRadius: 20,
-            paddingHorizontal: 14,
-            paddingTop: 10,
-            paddingBottom: 10,
-            marginHorizontal: 8,
-            borderWidth: 0,
-            borderRightWidth: 0,
-            borderColor: 'rgba(255,255,255,0.16)',
-            shadowColor: '#000',
-            shadowOpacity: 0.25,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
-          }}
-          containerStyle={{ backgroundColor: 'transparent' }}
-          messagesContainerStyle={{ backgroundColor: 'transparent' }}
-          textInputProps={{ placeholderTextColor: 'rgba(255,255,255,0.6)' }}
-          renderBubble={(props) => {
-            const isSystem = (props.currentMessage as any)?.system === true;
-            if (isSystem) {
-              return (
-                <View style={{
-                  backgroundColor: 'rgba(255,255,255,0.06)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.12)',
-                  padding: 12,
-                  marginHorizontal: 16,
-                  marginVertical: 8,
-                  borderRadius: 12,
-                  alignSelf: 'center',
-                  maxWidth: '90%',
-                }}>
-                  <MarkdownText
-                    text={props.currentMessage?.text || ''}
-                    color={'#EDE9FE'}
-                    codeBg={'rgba(255,255,255,0.08)'}
-                    codeColor={'#EDE9FE'}
-                  />
-                </View>
-              );
-            }
-            return (
-              <Bubble
-                {...props}
-                wrapperStyle={{
-                  right: {
-                    backgroundColor: 'rgba(147,51,234,0.22)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(168,85,247,0.65)',
-                    marginVertical: 3,
-                    shadowColor: '#8B5CF6',
-                    shadowOpacity: 0.35,
-                    shadowRadius: 10,
-                    shadowOffset: { width: 0, height: 3 },
-                  },
-                  left: {
-                    backgroundColor: 'rgba(59,130,246,0.18)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(96,165,250,0.55)',
-                    marginVertical: 3,
-                    shadowColor: '#60A5FA',
-                    shadowOpacity: 0.25,
-                    shadowRadius: 8,
-                    shadowOffset: { width: 0, height: 2 },
-                  },
-                }}
-                containerToNextStyle={{
-                  right: { marginBottom: 2 },
-                  left: { marginBottom: 2 },
-                }}
-                containerToPreviousStyle={{
-                  right: { marginTop: 2 },
-                  left: { marginTop: 2 },
-                }}
-                textStyle={{
-                  right: { color: '#F5F3FF' },
-                  left: { color: '#E8ECFF' },
-                }}
-              />
-            );
-          }}
           renderMessageText={(props) => {
             const isSystem = (props.currentMessage as any)?.system === true;
             if (isSystem) return null; // System messages handled in renderBubble
@@ -394,7 +531,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputToolbarWrapper: {
-    marginHorizontal: 8,
+    marginHorizontal: 0,
     marginBottom: 8,
     borderRadius: 16,
     overflow: 'hidden',

@@ -2,6 +2,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
+import AnimatedLoading from '../components/ui/AnimatedLoading';
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Appbar, Avatar, Badge, Button, Card, Chip, FAB, SegmentedButtons, Text, useTheme } from 'react-native-paper';
 import { ErrorBoundary, NetworkingErrorFallback } from '../src/components/ErrorBoundary';
@@ -131,30 +132,75 @@ function NetworkingScreenContent() {
   // Realtime: move updated conversations to top and update unread counts
   useEffect(() => {
     if (!user) return;
+    
+    console.log('[Networking] Setting up realtime subscriptions');
+    
     const channel = supabase
       .channel('rt-networking-list')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'networking_messages' }, (payload) => {
+      // Listen for new messages
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'networking_messages' 
+      }, (payload) => {
         const msg: any = payload.new;
+        console.log('[Networking] New message received:', msg.id, 'conversation:', msg.conversation_id);
+        
         if (!msg?.conversation_id) return;
+        
         // Move to top
         setConnectedMatches(prev => {
           const idx = prev.findIndex(m => m.conversationId === msg.conversation_id);
-          if (idx === -1) return prev;
+          if (idx === -1) {
+            console.log('[Networking] Conversation not found in list, reloading matches');
+            // Conversation might be new, reload matches
+            loadMatches();
+            return prev;
+          }
           const copy = [...prev];
           const [item] = copy.splice(idx, 1);
           copy.unshift(item);
           return copy;
         });
+        
         // Update unread if it's from the other user
         if (msg.sender_id !== user.id) {
+          console.log('[Networking] Incrementing unread count for conversation:', msg.conversation_id);
           setUnreadCounts(prev => ({ ...prev, [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1 }));
         }
+        
         // Update last activity for sort
         setLastActivity(prev => ({ ...prev, [msg.conversation_id]: msg.created_at }));
       })
-      .subscribe();
+      // Listen for message updates (read status changes)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'networking_messages'
+      }, async (payload) => {
+        const msg: any = payload.new;
+        console.log('[Networking] Message updated:', msg.id, 'is_read:', msg.is_read);
+        
+        // If message was marked as read, recalculate unread count for that conversation
+        if (msg.is_read && msg.conversation_id && user?.id) {
+          // Query the actual unread count instead of decrementing
+          const { count } = await supabase
+            .from('networking_messages')
+            .select('id', { count: 'exact' })
+            .eq('conversation_id', msg.conversation_id)
+            .neq('sender_id', user.id)
+            .eq('is_read', false);
+          
+          console.log('[Networking] Updated unread count for conversation:', msg.conversation_id, 'count:', count);
+          setUnreadCounts(prev => ({ ...prev, [msg.conversation_id]: count || 0 }));
+        }
+      })
+      .subscribe((status) => {
+        console.log('[Networking] Subscription status:', status);
+      });
 
     return () => {
+      console.log('[Networking] Cleaning up realtime subscriptions');
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
@@ -443,7 +489,7 @@ function NetworkingScreenContent() {
         style={styles.gradientBg}
       >
         <View style={[styles.container, { backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={{ color: '#FFFFFF' }}>Loading...</Text>
+          <AnimatedLoading transparentBackground size={96} message="" />
         </View>
       </LinearGradient>
     );
