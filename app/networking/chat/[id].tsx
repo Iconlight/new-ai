@@ -27,17 +27,20 @@ export default function NetworkingChatScreen() {
 
   const unsubscribeRef = useRef<() => void>(() => {});
 
+  // Subscribe to realtime and initialize data when the conversation or user changes
   useEffect(() => {
-    if (conversationId && user) {
-      // Start realtime first to catch UPDATE events triggered by mark-as-read
-      unsubscribeRef.current = subscribeToMessages();
-      // Then load messages/header and mark-as-read
-      init();
-    }
-    
+    if (!conversationId || !user) return;
+
+    // Start realtime first to catch UPDATE events triggered by mark-as-read
+    const unsubscribe = subscribeToMessages();
+    unsubscribeRef.current = unsubscribe;
+
+    // Then load messages/header and mark-as-read
+    init();
+
     // Cleanup: unsubscribe and mark messages as read when leaving the chat
     return () => {
-      try { unsubscribeRef.current(); } catch {}
+      try { unsubscribe(); } catch {}
       if (conversationId && user?.id) {
         (async () => {
           try {
@@ -54,8 +57,9 @@ export default function NetworkingChatScreen() {
         })();
       }
     };
+  }, [conversationId, user?.id]);
 
-  // Web fallback: poll for new messages every 3s
+  // Web fallback: poll for new messages every 3s when on web platform
   useEffect(() => {
     if (!conversationId || !user) return;
     if (Platform.OS !== 'web') return;
@@ -90,10 +94,7 @@ export default function NetworkingChatScreen() {
       mounted = false;
       if (timer) clearInterval(timer);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, user?.id, Platform.OS]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, user?.id]);
+  }, [conversationId, user?.id, Platform.OS, messages, otherUserName]);
 
   const init = async () => {
     await Promise.all([loadMessages(), loadHeader()]);
@@ -181,7 +182,7 @@ export default function NetworkingChatScreen() {
         event: 'INSERT',
         schema: 'public',
         table: 'networking_messages',
-        filter: `conversation_id=eq.${conversationId}`,
+        filter: `conversation_id=eq.${String(conversationId)}`,
       }, async (payload) => {
         const msg: any = payload.new;
         console.log('[NetworkingChat] INSERT message event:', msg?.id);
@@ -258,7 +259,9 @@ export default function NetworkingChatScreen() {
           setMessages(prev => prev.map(m => m._id === msg.id ? { ...m, received: true } : m));
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[NetworkingChat] Channel status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
