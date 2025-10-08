@@ -2,6 +2,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Appbar, Avatar, Badge, Button, Card, Chip, FAB, SegmentedButtons, Text, useTheme } from 'react-native-paper';
@@ -36,6 +37,15 @@ function NetworkingScreenContent() {
       loadMatches();
     }
   }, [user]);
+
+  // Refresh matches and unread counts whenever this screen regains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user) return;
+      loadMatches();
+      return undefined;
+    }, [user?.id])
+  );
 
   const checkNetworkingStatus = async () => {
     if (!user) return;
@@ -133,10 +143,10 @@ function NetworkingScreenContent() {
   useEffect(() => {
     if (!user) return;
     
-    console.log('[Networking] Setting up realtime subscriptions');
+    console.log('[Networking] Setting up realtime subscriptions, user:', user.id);
     
     const channel = supabase
-      .channel('rt-networking-list')
+      .channel('rt-networking-list-main')
       // Listen for new messages
       .on('postgres_changes', { 
         event: 'INSERT', 
@@ -144,19 +154,29 @@ function NetworkingScreenContent() {
         table: 'networking_messages' 
       }, (payload) => {
         const msg: any = payload.new;
-        console.log('[Networking] New message received:', msg.id, 'conversation:', msg.conversation_id);
+        console.log('[Networking] ✅ New message INSERT event received:', {
+          messageId: msg.id,
+          conversationId: msg.conversation_id,
+          senderId: msg.sender_id,
+          currentUserId: user.id,
+          isFromOtherUser: msg.sender_id !== user.id
+        });
         
-        if (!msg?.conversation_id) return;
+        if (!msg?.conversation_id) {
+          console.log('[Networking] ⚠️ Message missing conversation_id, ignoring');
+          return;
+        }
         
         // Move to top
         setConnectedMatches(prev => {
           const idx = prev.findIndex(m => m.conversationId === msg.conversation_id);
           if (idx === -1) {
-            console.log('[Networking] Conversation not found in list, reloading matches');
+            console.log('[Networking] ⚠️ Conversation not found in list, reloading matches');
             // Conversation might be new, reload matches
             loadMatches();
             return prev;
           }
+          console.log('[Networking] Moving conversation to top, index was:', idx);
           const copy = [...prev];
           const [item] = copy.splice(idx, 1);
           copy.unshift(item);
@@ -165,8 +185,15 @@ function NetworkingScreenContent() {
         
         // Update unread if it's from the other user
         if (msg.sender_id !== user.id) {
-          console.log('[Networking] Incrementing unread count for conversation:', msg.conversation_id);
-          setUnreadCounts(prev => ({ ...prev, [msg.conversation_id]: (prev[msg.conversation_id] || 0) + 1 }));
+          console.log('[Networking] ✅ Incrementing unread count for conversation:', msg.conversation_id);
+          setUnreadCounts(prev => {
+            const oldCount = prev[msg.conversation_id] || 0;
+            const newCount = oldCount + 1;
+            console.log('[Networking] Unread count updated:', msg.conversation_id, 'from', oldCount, 'to', newCount);
+            return { ...prev, [msg.conversation_id]: newCount };
+          });
+        } else {
+          console.log('[Networking] Message is from current user, not incrementing unread');
         }
         
         // Update last activity for sort
@@ -179,7 +206,7 @@ function NetworkingScreenContent() {
         table: 'networking_messages'
       }, async (payload) => {
         const msg: any = payload.new;
-        console.log('[Networking] Message updated:', msg.id, 'is_read:', msg.is_read);
+        console.log('[Networking] Message UPDATE event:', msg.id, 'is_read:', msg.is_read);
         
         // If message was marked as read, recalculate unread count for that conversation
         if (msg.is_read && msg.conversation_id && user?.id) {
@@ -191,16 +218,23 @@ function NetworkingScreenContent() {
             .neq('sender_id', user.id)
             .eq('is_read', false);
           
-          console.log('[Networking] Updated unread count for conversation:', msg.conversation_id, 'count:', count);
+          console.log('[Networking] Recalculated unread count for conversation:', msg.conversation_id, 'count:', count);
           setUnreadCounts(prev => ({ ...prev, [msg.conversation_id]: count || 0 }));
         }
       })
       .subscribe((status) => {
-        console.log('[Networking] Subscription status:', status);
+        console.log('[Networking] 🔌 Subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[Networking] ✅ Successfully subscribed to realtime updates');
+        } else if (status === 'CLOSED') {
+          console.log('[Networking] ❌ Subscription closed');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.log('[Networking] ❌ Channel error');
+        }
       });
 
     return () => {
-      console.log('[Networking] Cleaning up realtime subscriptions');
+      console.log('[Networking] 🔌 Cleaning up realtime subscription');
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
@@ -374,6 +408,8 @@ function NetworkingScreenContent() {
             onPress={async () => {
               const convoId = match.conversationId || await getConversationIdByMatchId(match.id);
               if (convoId) {
+                // Optimistically clear unread for instant UI feedback
+                setUnreadCounts(prev => ({ ...prev, [convoId]: 0 }));
                 router.push({ pathname: '/networking/chat/[id]', params: { id: convoId, name: match.otherUser?.name || '' } });
               } else {
                 Alert.alert('Conversation not ready', 'Please try again in a moment.');
@@ -465,6 +501,8 @@ function NetworkingScreenContent() {
             onPress={async () => {
               const convoId = match.conversationId || await getConversationIdByMatchId(match.id);
               if (convoId) {
+                // Optimistically clear unread for instant UI feedback
+                setUnreadCounts(prev => ({ ...prev, [convoId]: 0 }));
                 router.push({ pathname: '/networking/chat/[id]', params: { id: convoId, name: match.otherUser?.name || '' } });
               } else {
                 Alert.alert('Conversation not ready', 'Please try again in a moment.');

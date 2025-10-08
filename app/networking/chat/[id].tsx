@@ -27,6 +27,20 @@ export default function NetworkingChatScreen() {
 
   const unsubscribeRef = useRef<() => void>(() => {});
 
+  // Merge helper to preserve all history, de-duplicate by _id, and keep newest-first
+  const mergeMessages = (prev: IMessage[], incoming: IMessage | IMessage[]): IMessage[] => {
+    const add = Array.isArray(incoming) ? incoming : [incoming];
+    const map = new Map<string | number, IMessage>();
+    // seed with prev
+    for (const m of prev) map.set(m._id as any, m);
+    // add/overwrite with incoming
+    for (const m of add) map.set(m._id as any, m);
+    const arr = Array.from(map.values());
+    arr.sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime());
+    console.log('[NetworkingChat] mergeMessages: prev count:', prev.length, 'incoming count:', add.length, 'result count:', arr.length);
+    return arr;
+  };
+
   // Subscribe to realtime and initialize data when the conversation or user changes
   useEffect(() => {
     if (!conversationId || !user) return;
@@ -59,6 +73,15 @@ export default function NetworkingChatScreen() {
     };
   }, [conversationId, user?.id]);
 
+  // Debug: Log messages state changes
+  useEffect(() => {
+    console.log('[NetworkingChat] 📊 Messages state updated, count:', messages.length);
+    if (messages.length > 0) {
+      console.log('[NetworkingChat] 📊 Newest message:', messages[0]._id, messages[0].text?.substring(0, 30));
+      console.log('[NetworkingChat] 📊 Oldest message:', messages[messages.length - 1]._id, messages[messages.length - 1].text?.substring(0, 30));
+    }
+  }, [messages.length]);
+
   // Web fallback: poll for new messages every 3s when on web platform
   useEffect(() => {
     if (!conversationId || !user) return;
@@ -82,7 +105,7 @@ export default function NetworkingChatScreen() {
             sent: msg.sender_id === user.id ? true : undefined,
             received: msg.sender_id === user.id ? Boolean(msg.is_read) : undefined,
           }));
-          setMessages(prev => GiftedChat.append(prev, mapped));
+          setMessages(prev => mergeMessages(prev, mapped));
           newOnes.forEach((m: any) => seen.add(String(m.id)));
         }
       } catch {}
@@ -138,6 +161,7 @@ export default function NetworkingChatScreen() {
     setLoading(true);
     try {
       const { messages: networkingMessages } = await getNetworkingMessages(conversationId);
+      console.log('[NetworkingChat] loadMessages: fetched', networkingMessages.length, 'messages from database');
 
       const giftedMessages: IMessage[] = networkingMessages.map((msg: any) => {
         const isSystem = msg.message_type === 'system' || msg.message_type === 'starter';
@@ -165,6 +189,9 @@ export default function NetworkingChatScreen() {
         } as IMessage;
       }).reverse();
 
+      console.log('[NetworkingChat] loadMessages: setting', giftedMessages.length, 'messages to state');
+      console.log('[NetworkingChat] First 3 message IDs:', giftedMessages.slice(0, 3).map(m => m._id));
+      console.log('[NetworkingChat] Last 3 message IDs:', giftedMessages.slice(-3).map(m => m._id));
       setMessages(giftedMessages);
     } catch (error) {
       console.error('Error loading networking messages:', error);
@@ -203,7 +230,7 @@ export default function NetworkingChatScreen() {
           },
           sent: msg.sender_id === user?.id ? true : undefined,
         };
-        setMessages(prev => GiftedChat.append(prev, [gifted]));
+        setMessages(prev => mergeMessages(prev, gifted));
 
         // If received from other user, mark as read immediately
         try {
@@ -213,36 +240,6 @@ export default function NetworkingChatScreen() {
               .update({ is_read: true })
               .eq('id', msg.id)
               .eq('is_read', false);
-          }
-        } catch {}
-      })
-      // Fallback: broad INSERT listener (no filter). Safeguard in case filter doesn't fire on web
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'networking_messages',
-      }, async (payload) => {
-        const msg: any = payload.new;
-        if (!msg || String(msg.conversation_id) !== String(conversationId)) return;
-        console.log('[NetworkingChat] INSERT (fallback) message event:', msg?.id);
-        const isSystem = msg.message_type === 'system' || msg.message_type === 'starter';
-        const gifted: IMessage = isSystem ? {
-          _id: msg.id,
-          text: msg.content,
-          createdAt: new Date(msg.created_at),
-          system: true,
-          user: { _id: 'system' },
-        } : {
-          _id: msg.id,
-          text: msg.content,
-          createdAt: new Date(msg.created_at),
-          user: { _id: msg.sender_id, name: msg.sender_id === user?.id ? 'You' : otherUserName },
-          sent: msg.sender_id === user?.id ? true : undefined,
-        };
-        setMessages(prev => GiftedChat.append(prev, [gifted]));
-        try {
-          if (msg.sender_id !== user?.id) {
-            await supabase.from('networking_messages').update({ is_read: true }).eq('id', msg.id).eq('is_read', false);
           }
         } catch {}
       })
@@ -274,9 +271,8 @@ export default function NetworkingChatScreen() {
     const message = newMessages[0];
     if (!message?.text) return;
 
-    // Optimistically add message to UI
-    setMessages(previousMessages => GiftedChat.append(previousMessages, newMessages));
-
+    // Don't add optimistically - let realtime handle it to avoid duplicates
+    // The message will appear when the INSERT event fires
     try {
       await sendNetworkingMessage(conversationId, user.id, message.text);
     } catch (error) {
@@ -314,6 +310,10 @@ export default function NetworkingChatScreen() {
           renderAvatar={() => null}
           placeholder="Type your message..."
           alwaysShowSend
+          infiniteScroll={true}
+          loadEarlier={false}
+          isLoadingEarlier={false}
+          inverted={false}
           // Ensure no container indentation by overriding Message container
           renderMessage={(props) => (
             <Message
@@ -330,22 +330,33 @@ export default function NetworkingChatScreen() {
             if (isSystem) {
               return (
                 <View style={{
-                  backgroundColor: 'rgba(255,255,255,0.06)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.12)',
-                  padding: 12,
-                  marginHorizontal: 16,
-                  marginVertical: 8,
-                  borderRadius: 12,
                   alignSelf: 'center',
+                  marginVertical: 12,
+                  marginHorizontal: 16,
                   maxWidth: '90%',
                 }}>
-                  <MarkdownText
-                    text={props.currentMessage?.text || ''}
-                    color={'#EDE9FE'}
-                    codeBg={'rgba(255,255,255,0.08)'}
-                    codeColor={'#EDE9FE'}
-                  />
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(255,255,255,0.08)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.18)',
+                      borderRadius: 16,
+                      padding: 14,
+                      overflow: 'hidden',
+                      shadowColor: '#8B5CF6',
+                      shadowOpacity: 0.35,
+                      shadowRadius: 14,
+                      shadowOffset: { width: 0, height: 6 },
+                    }}
+                  >
+                    <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                    <MarkdownText
+                      text={props.currentMessage?.text || ''}
+                      color={'#FFFFFF'}
+                      codeBg={'rgba(255,255,255,0.14)'}
+                      codeColor={'#FFFFFF'}
+                    />
+                  </View>
                 </View>
               );
             }
@@ -425,7 +436,14 @@ export default function NetworkingChatScreen() {
           }}
           minComposerHeight={36}
           maxComposerHeight={90}
-          listViewProps={{ keyboardShouldPersistTaps: 'always' } as any}
+          listViewProps={{ 
+            keyboardShouldPersistTaps: 'always',
+            scrollEnabled: true,
+            nestedScrollEnabled: true,
+            // Improve web scrolling behavior
+            style: { minHeight: 0 },
+            contentContainerStyle: { flexGrow: 1, paddingVertical: 6 },
+          } as any}
           renderInputToolbar={(props) => (
             <View style={styles.inputToolbarWrapper}>
               <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
@@ -487,6 +505,9 @@ const styles = StyleSheet.create({
   },
   gradientBg: {
     flex: 1,
+    // Important for web: allow children to determine their own scrollable height
+    // Without minHeight: 0, nested Flex containers can prevent scrolling
+    minHeight: 0,
   },
   decorOrbs: {
     position: 'absolute',
@@ -532,6 +553,9 @@ const styles = StyleSheet.create({
   },
   chatContainer: {
     flex: 1,
+    backgroundColor: 'transparent',
+    // Important for web scrolling
+    minHeight: 0,
   },
   inputToolbarWrapper: {
     marginHorizontal: 0,
