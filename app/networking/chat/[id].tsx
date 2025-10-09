@@ -187,7 +187,7 @@ export default function NetworkingChatScreen() {
           sent: isOutgoing ? true : undefined,
           received: isOutgoing ? Boolean(msg.is_read) : undefined,
         } as IMessage;
-      }).reverse();
+      });
 
       console.log('[NetworkingChat] loadMessages: setting', giftedMessages.length, 'messages to state');
       console.log('[NetworkingChat] First 3 message IDs:', giftedMessages.slice(0, 3).map(m => m._id));
@@ -313,7 +313,7 @@ export default function NetworkingChatScreen() {
           infiniteScroll={true}
           loadEarlier={false}
           isLoadingEarlier={false}
-          inverted={false}
+          inverted={true}
           // Ensure no container indentation by overriding Message container
           renderMessage={(props) => (
             <Message
