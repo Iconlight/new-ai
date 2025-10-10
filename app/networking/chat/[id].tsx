@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
-import { Bubble, GiftedChat, IMessage, InputToolbar, Send, Message } from 'react-native-gifted-chat';
+import { Bubble, GiftedChat, IMessage, InputToolbar, Message, Send } from 'react-native-gifted-chat';
 import { Appbar, useTheme } from 'react-native-paper';
 
 import MarkdownText from '../../../components/ui/MarkdownText';
@@ -89,8 +89,7 @@ export default function NetworkingChatScreen() {
     let timer: any;
     let mounted = true;
     const seen = new Set<string>();
-    // seed with current IDs to avoid duplication
-    messages.forEach(m => seen.add(String(m._id)));
+    
     const poll = async () => {
       try {
         const { messages: list } = await getNetworkingMessages(conversationId as string);
@@ -105,11 +104,22 @@ export default function NetworkingChatScreen() {
             sent: msg.sender_id === user.id ? true : undefined,
             received: msg.sender_id === user.id ? Boolean(msg.is_read) : undefined,
           }));
-          setMessages(prev => mergeMessages(prev, mapped));
+          setMessages(prev => {
+            // Add current message IDs to seen set
+            prev.forEach(m => seen.add(String(m._id)));
+            return mergeMessages(prev, mapped);
+          });
           newOnes.forEach((m: any) => seen.add(String(m.id)));
+        } else {
+          // Even if no new messages, update the seen set with current messages
+          setMessages(prev => {
+            prev.forEach(m => seen.add(String(m._id)));
+            return prev;
+          });
         }
       } catch {}
     };
+    
     timer = setInterval(poll, 3000);
     // immediate first poll
     poll();
@@ -117,7 +127,7 @@ export default function NetworkingChatScreen() {
       mounted = false;
       if (timer) clearInterval(timer);
     };
-  }, [conversationId, user?.id, Platform.OS, messages, otherUserName]);
+  }, [conversationId, user?.id, Platform.OS, otherUserName]);
 
   const init = async () => {
     await Promise.all([loadMessages(), loadHeader()]);
@@ -308,112 +318,92 @@ export default function NetworkingChatScreen() {
             _id: user?.id || '',
           }}
           renderAvatar={() => null}
+          showUserAvatar={false}
+          renderAvatarOnTop={false}
           placeholder="Type your message..."
           alwaysShowSend
           infiniteScroll={true}
           loadEarlier={false}
           isLoadingEarlier={false}
           inverted={true}
-          // Ensure no container indentation by overriding Message container
-          renderMessage={(props) => (
-            <Message
-              {...props}
-              containerStyle={{
-                left: { marginLeft: 0, paddingLeft: 0 },
-                right: { marginRight: 0, paddingRight: 0 },
-              }}
-            />
-          )}
-          // Ensure bubbles do not indent when grouping; align to edges and add ticks
-          renderBubble={(props) => {
+          messagesContainerStyle={{ paddingHorizontal: 0, alignItems: 'stretch' }}
+          // Render our own full-width row with Bubble to eliminate default avatar gutter/indentation
+          renderMessage={(props) => {
             const isSystem = (props.currentMessage as any)?.system === true;
             if (isSystem) {
               return (
-                <View style={{
-                  alignSelf: 'center',
-                  marginVertical: 12,
-                  marginHorizontal: 16,
-                  maxWidth: '90%',
-                }}>
-                  <View
-                    style={{
-                      backgroundColor: 'rgba(255,255,255,0.08)',
-                      borderWidth: 1,
-                      borderColor: 'rgba(255,255,255,0.18)',
-                      borderRadius: 16,
-                      padding: 14,
-                      overflow: 'hidden',
-                      shadowColor: '#8B5CF6',
-                      shadowOpacity: 0.35,
-                      shadowRadius: 14,
-                      shadowOffset: { width: 0, height: 6 },
-                    }}
-                  >
-                    <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
-                    <MarkdownText
-                      text={props.currentMessage?.text || ''}
-                      color={'#FFFFFF'}
-                      codeBg={'rgba(255,255,255,0.14)'}
-                      codeColor={'#FFFFFF'}
-                    />
+                <View style={{ width: '100%', alignItems: 'center' }}>
+                  <View style={{
+                    alignSelf: 'center',
+                    marginVertical: 12,
+                    marginHorizontal: 16,
+                    maxWidth: '90%',
+                  }}>
+                    <View
+                      style={{
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.18)',
+                        borderRadius: 16,
+                        padding: 14,
+                        overflow: 'hidden',
+                        shadowColor: '#8B5CF6',
+                        shadowOpacity: 0.35,
+                        shadowRadius: 14,
+                        shadowOffset: { width: 0, height: 6 },
+                      }}
+                    >
+                      <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      <MarkdownText
+                        text={props.currentMessage?.text || ''}
+                        color={'#FFFFFF'}
+                        codeBg={'rgba(255,255,255,0.14)'}
+                        codeColor={'#FFFFFF'}
+                      />
+                    </View>
                   </View>
                 </View>
               );
             }
+            const isRight = props.position === 'right';
+            const isCurrentUser = props.currentMessage?.user?._id === user?.id;
+            const textColor = isCurrentUser ? '#F5F3FF' : '#E8ECFF';
+            const codeBg = isCurrentUser ? 'rgba(139,92,246,0.25)' : 'rgba(59,130,246,0.18)';
             return (
-              <Bubble
-                {...props}
-                containerStyle={{
-                  left: { marginLeft: 0, alignItems: 'flex-start' },
-                  right: { marginRight: 0, alignItems: 'flex-end' },
-                }}
-                wrapperStyle={{
-                  right: {
-                    backgroundColor: 'rgba(147,51,234,0.22)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(168,85,247,0.65)',
-                    marginVertical: 3,
-                    shadowColor: '#8B5CF6',
-                    shadowOpacity: 0.35,
-                    shadowRadius: 10,
-                    shadowOffset: { width: 0, height: 3 },
-                  },
-                  left: {
-                    backgroundColor: 'rgba(59,130,246,0.18)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(96,165,250,0.55)',
-                    marginVertical: 3,
-                    shadowColor: '#60A5FA',
-                    shadowOpacity: 0.25,
-                    shadowRadius: 8,
-                    shadowOffset: { width: 0, height: 2 },
-                  },
-                }}
-                textStyle={{
-                  right: { color: '#F5F3FF' },
-                  left: { color: '#E8ECFF' },
-                }}
-                containerToNextStyle={{
-                  left: { marginLeft: 0 },
-                  right: { marginRight: 0 },
-                }}
-                containerToPreviousStyle={{
-                  left: { marginLeft: 0 },
-                  right: { marginRight: 0 },
-                }}
-                renderTicks={(currentMessage?: IMessage) => {
-                  if (!currentMessage || currentMessage.user?._id !== user?.id) return null;
-                  return (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 4 }}>
+              <View style={{ flex: 1, alignSelf: 'stretch', width: '100%', flexDirection: 'row', justifyContent: isRight ? 'flex-end' : 'flex-start' }}>
+                <View style={{
+                  maxWidth: '80%',
+                  backgroundColor: isRight ? 'rgba(147,51,234,0.22)' : 'rgba(59,130,246,0.18)',
+                  borderWidth: 1,
+                  borderColor: isRight ? 'rgba(168,85,247,0.65)' : 'rgba(96,165,250,0.55)',
+                  marginVertical: 3,
+                  marginLeft: 0,
+                  marginRight: 0,
+                  marginHorizontal: 0,
+                  paddingVertical: 2,
+                  paddingHorizontal: 2,
+                  borderRadius: 16,
+                  alignSelf: isRight ? 'flex-end' : 'flex-start',
+                  shadowColor: isRight ? '#8B5CF6' : '#60A5FA',
+                  shadowOpacity: isRight ? 0.35 : 0.25,
+                  shadowRadius: isRight ? 10 : 8,
+                  shadowOffset: { width: 0, height: isRight ? 3 : 2 },
+                }}>
+                  <View style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
+                    <MarkdownText text={props.currentMessage?.text || ''} color={textColor} codeBg={codeBg} codeColor={textColor} />
+                  </View>
+                  {isCurrentUser ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 6, paddingBottom: 2 }}>
                       <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 10 }}>
-                        {currentMessage?.received ? '✓✓' : currentMessage?.sent ? '✓' : ''}
+                        {props.currentMessage?.received ? '✓✓' : props.currentMessage?.sent ? '✓' : ''}
                       </Text>
                     </View>
-                  );
-                }}
-              />
+                  ) : null}
+                </View>
+              </View>
             );
           }}
+          // (Removed renderBubble override; we fully control layout in renderMessage)
           textInputProps={{
             placeholderTextColor: 'rgba(255,255,255,0.6)',
             style: {
@@ -442,7 +432,7 @@ export default function NetworkingChatScreen() {
             nestedScrollEnabled: true,
             // Improve web scrolling behavior
             style: { minHeight: 0 },
-            contentContainerStyle: { flexGrow: 1, paddingVertical: 6 },
+            contentContainerStyle: { flexGrow: 1, paddingVertical: 6, paddingHorizontal: 0, alignItems: 'stretch' },
           } as any}
           renderInputToolbar={(props) => (
             <View style={styles.inputToolbarWrapper}>
