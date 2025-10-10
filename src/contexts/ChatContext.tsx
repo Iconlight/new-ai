@@ -15,7 +15,7 @@ interface ChatContextType {
   sendMessage: (text: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
   refreshChats: () => Promise<void>;
-  startChatWithAI: (initialMessage: string, suggestedTitle?: string) => Promise<Chat | null>;
+  startChatWithAI: (initialMessage: string, suggestedTitle?: string, newsContext?: { title: string; description?: string; url?: string; category?: string }) => Promise<Chat | null>;
   isTyping: boolean;
 }
 
@@ -71,14 +71,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const startChatWithAI = async (initialMessage: string, suggestedTitle?: string): Promise<Chat | null> => {
+  const startChatWithAI = async (initialMessage: string, suggestedTitle?: string, newsContext?: { title: string; description?: string; url?: string; category?: string }): Promise<Chat | null> => {
     if (!user) return null;
     try {
       const chatTitle = suggestedTitle || 'New Conversation';
 
       const { data: newChat, error } = await supabase
         .from('chats')
-        .insert({ user_id: user.id, title: chatTitle })
+        .insert({ 
+          user_id: user.id, 
+          title: chatTitle,
+          news_context: newsContext || null
+        })
         .select()
         .single();
 
@@ -252,9 +256,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Add current message
       conversationHistory.push({ role: 'user', content: text });
 
-      // Generate AI response
+      // Generate AI response with news context if available
       setIsTyping(true);
-      const aiResponse = await generateAIResponse(conversationHistory, userInterests);
+      const aiResponse = await generateAIResponse(
+        conversationHistory, 
+        userInterests,
+        currentChat?.news_context
+      );
 
       const aiMessage: GiftedChatMessage = {
         _id: Crypto.randomUUID(),

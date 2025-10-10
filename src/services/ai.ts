@@ -46,7 +46,8 @@ export interface AIResponse {
 
 export const generateAIResponse = async (
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
-  userInterests: string[] = []
+  userInterests: string[] = [],
+  newsContext?: { title: string; description?: string; url?: string; category?: string }
 ): Promise<AIResponse> => {
   if (!openrouter) {
     return {
@@ -56,9 +57,48 @@ export const generateAIResponse = async (
   }
 
   try {
-    const systemPrompt = `You are a proactive AI assistant that engages users in meaningful conversations based on their interests: ${userInterests.join(', ')}. 
-    Be conversational, engaging, and helpful. Ask follow-up questions to keep the conversation flowing. 
-    Keep responses concise but informative. Show genuine interest in the user's thoughts and experiences.`;
+    // Extract news context from the first assistant message if not provided
+    let contextInfo = newsContext;
+    if (!contextInfo && messages.length > 0) {
+      const firstMessage = messages.find(m => m.role === 'assistant');
+      if (firstMessage?.content) {
+        // Try to extract quoted title from the message
+        const titleMatch = firstMessage.content.match(/"([^"]+)"/);
+        if (titleMatch) {
+          contextInfo = { title: titleMatch[1] };
+        }
+      }
+    }
+
+    const interestsContext = userInterests.length > 0 
+      ? `User's interests: ${userInterests.join(', ')}.` 
+      : '';
+
+    const newsContextPrompt = contextInfo 
+      ? `\n\nIMPORTANT CONTEXT: This conversation is about a specific news article/topic:
+- Title: "${contextInfo.title}"
+${contextInfo.description ? `- Description: ${contextInfo.description}` : ''}
+${contextInfo.category ? `- Category: ${contextInfo.category}` : ''}
+${contextInfo.url ? `- Source: ${contextInfo.url}` : ''}
+
+You MUST base your responses on this specific article/topic. Do NOT use general knowledge or training data about similar topics. If the user asks about details not in the article, acknowledge that and ask them what they think or redirect to what IS in the article. Stay focused on THIS specific news story.`
+      : '';
+
+    const systemPrompt = `You are ProactiveAI, a conversational AI assistant designed to engage users in meaningful discussions about current news and topics based on their interests. ${interestsContext}
+
+Your identity:
+- Your name is "ProactiveAI" (not ChatGPT, not any other AI)
+- You are a specialized news discussion assistant
+- You help users explore and discuss current events
+
+Your behavior:
+- Be conversational, engaging, and thoughtful
+- Ask follow-up questions to keep the conversation flowing
+- Keep responses concise but informative (2-4 sentences typically)
+- Show genuine interest in the user's thoughts and perspectives
+- Encourage critical thinking and diverse viewpoints${newsContextPrompt}
+
+Remember: You are ProactiveAI, and when discussing news, always stay grounded in the specific article being discussed.`;
 
     const completion = await openrouter.chat.completions.create({
       model: 'deepseek/deepseek-chat',

@@ -650,8 +650,9 @@ export const sendNetworkingMessage = async (
     console.log('✅ Message inserted successfully:', data.id);
 
     if (data) {
-      // Send notification to the other user in the conversation
-      await sendNetworkingMessageNotification(conversationId, senderId, content);
+      // Note: Push notifications are now handled automatically by database trigger
+      // See: src/database/migrations/add_message_notification_trigger.sql
+      // The trigger calls the Edge Function: supabase/functions/send-message-notification
 
       // Update conversation last message time
       await supabase
@@ -814,89 +815,6 @@ const getMatchesFromActivity = async (userId: string): Promise<NetworkingMatch[]
   }
 };
 
-/**
- * Sends a push notification when a networking message is received
- */
-const sendNetworkingMessageNotification = async (
-  conversationId: string,
-  senderId: string,
-  content: string
-): Promise<void> => {
-  try {
-    console.log(`[Notification] Starting notification for conversation ${conversationId}, sender ${senderId}`);
-    
-    // Get conversation details to find the recipient
-    const { data: conversation, error: convError } = await supabase
-      .from('networking_conversations')
-      .select('user_id_1, user_id_2')
-      .eq('id', conversationId)
-      .single();
-
-    if (convError) {
-      console.error('[Notification] Error fetching conversation:', convError);
-      return;
-    }
-
-    if (!conversation) {
-      console.warn('[Notification] Conversation not found:', conversationId);
-      return;
-    }
-
-    // Determine recipient (the user who is NOT the sender)
-    const recipientId = conversation.user_id_1 === senderId 
-      ? conversation.user_id_2 
-      : conversation.user_id_1;
-
-    console.log(`[Notification] Recipient determined: ${recipientId}`);
-
-    // Get sender's profile for the notification
-    const senderProfile = await fetchDisplayProfile(senderId, conversationId);
-    console.log(`[Notification] Sender profile: ${senderProfile.name}`);
-    
-    // Check if recipient has notifications enabled (check both tables for compatibility)
-    const { data: preferences, error: prefError } = await supabase
-      .from('user_preferences')
-      .select('notification_enabled')
-      .eq('user_id', recipientId)
-      .maybeSingle();
-
-    if (prefError) {
-      console.warn('[Notification] Error fetching preferences (continuing anyway):', prefError);
-    }
-
-    // If explicitly disabled, don't send
-    if (preferences?.notification_enabled === false) {
-      console.log('[Notification] User has notifications disabled');
-      return;
-    }
-
-    // Send a remote push notification to the recipient device(s)
-    const { sendPushToUser } = await import('./push');
-
-    // Truncate long messages for notification
-    const truncatedContent = content.length > 100
-      ? content.substring(0, 97) + '...'
-      : content;
-
-    const deepLink = `proactiveai://networking/chat/${conversationId}?name=${encodeURIComponent(senderProfile.name)}`;
-
-    const result = await sendPushToUser(recipientId, {
-      title: `💬 ${senderProfile.name}`,
-      body: truncatedContent,
-      data: {
-        type: 'networking_message',
-        conversationId,
-        senderId,
-        senderName: senderProfile.name,
-        deepLink,
-      },
-      priority: 'high',
-      sound: 'default',
-      icon: './assets/images/notification-icon.png', // Custom notification icon
-    });
-
-    console.log(`Push notification attempted to ${recipientId}: sent=${result.sent}, success=${result.success}`);
-  } catch (error) {
-    console.error('Error sending networking message notification:', error);
-  }
-};
+// Note: Push notification function removed - now handled by database trigger
+// See: src/database/migrations/add_message_notification_trigger.sql
+// The trigger automatically calls: supabase/functions/send-message-notification

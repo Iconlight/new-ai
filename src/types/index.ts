@@ -31,6 +31,12 @@ export interface Chat {
   title: string;
   created_at: string;
   updated_at: string;
+  news_context?: {
+    title: string;
+    description?: string;
+    url?: string;
+    category?: string;
+  };
 }
 
 export interface Message {
@@ -52,6 +58,10 @@ export interface ProactiveTopic {
   is_sent: boolean;
   created_at: string;
   sent_at?: string;
+  source_url?: string;
+  source_title?: string;
+  source_type?: string;
+  category?: string;
 }
 
 export interface NetworkingMatch {

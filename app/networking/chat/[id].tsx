@@ -4,7 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
-import { Bubble, GiftedChat, IMessage, InputToolbar, Message, Send } from 'react-native-gifted-chat';
+import { Bubble, GiftedChat, IMessage, InputToolbar, Send, Message } from 'react-native-gifted-chat';
+import * as Notifications from 'expo-notifications';
 import { Appbar, useTheme } from 'react-native-paper';
 
 import MarkdownText from '../../../components/ui/MarkdownText';
@@ -72,6 +73,24 @@ export default function NetworkingChatScreen() {
       }
     };
   }, [conversationId, user?.id]);
+
+  // Ensure Android notification channel exists (no-op on iOS/web)
+  useEffect(() => {
+    (async () => {
+      try {
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#8B5CF6',
+          });
+        }
+      } catch (e) {
+        console.warn('[NetworkingChat] Failed to set Android channel', (e as any)?.message || e);
+      }
+    })();
+  }, []);
 
   // Debug: Log messages state changes
   useEffect(() => {
@@ -199,6 +218,9 @@ export default function NetworkingChatScreen() {
         } as IMessage;
       });
 
+      // Sort messages newest-first to match GiftedChat's inverted={true} expectation
+      giftedMessages.sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime());
+
       console.log('[NetworkingChat] loadMessages: setting', giftedMessages.length, 'messages to state');
       console.log('[NetworkingChat] First 3 message IDs:', giftedMessages.slice(0, 3).map(m => m._id));
       console.log('[NetworkingChat] Last 3 message IDs:', giftedMessages.slice(-3).map(m => m._id));
@@ -252,6 +274,32 @@ export default function NetworkingChatScreen() {
               .eq('is_read', false);
           }
         } catch {}
+
+        // Schedule a local notification for incoming messages (app must be running)
+        // Note: Remote push (when app is closed) is handled by Edge Function
+        try {
+          if (msg.sender_id !== user?.id && Platform.OS !== 'web') {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `💬 ${otherUserName || 'New message'}`,
+                body: (msg.content || '').slice(0, 140),
+                data: {
+                  type: 'networking_message',
+                  conversationId: String(conversationId),
+                  senderName: otherUserName,
+                },
+                sound: 'default',
+                ...(Platform.OS === 'android' && {
+                  color: '#8B5CF6',
+                }),
+              },
+              // null triggers immediately; uses 'default' channel on Android
+              trigger: null as any,
+            });
+          }
+        } catch (e) {
+          console.warn('[NetworkingChat] Failed to schedule local notification', (e as any)?.message || e);
+        }
       })
       // Listen for read status updates to update ticks on our sent messages
       .on('postgres_changes', {
@@ -369,17 +417,21 @@ export default function NetworkingChatScreen() {
             const isCurrentUser = props.currentMessage?.user?._id === user?.id;
             const textColor = isCurrentUser ? '#F5F3FF' : '#E8ECFF';
             const codeBg = isCurrentUser ? 'rgba(139,92,246,0.25)' : 'rgba(59,130,246,0.18)';
+            
+            // Format timestamp
+            const messageTime = props.currentMessage?.createdAt;
+            const timeString = messageTime 
+              ? new Date(messageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '';
+            
             return (
-              <View style={{ flex: 1, alignSelf: 'stretch', width: '100%', flexDirection: 'row', justifyContent: isRight ? 'flex-end' : 'flex-start' }}>
+              <View style={{ flex: 1, alignSelf: 'stretch', width: '100%', flexDirection: 'row', justifyContent: isRight ? 'flex-end' : 'flex-start', paddingHorizontal: 12 }}>
                 <View style={{
                   maxWidth: '80%',
                   backgroundColor: isRight ? 'rgba(147,51,234,0.22)' : 'rgba(59,130,246,0.18)',
                   borderWidth: 1,
                   borderColor: isRight ? 'rgba(168,85,247,0.65)' : 'rgba(96,165,250,0.55)',
                   marginVertical: 3,
-                  marginLeft: 0,
-                  marginRight: 0,
-                  marginHorizontal: 0,
                   paddingVertical: 2,
                   paddingHorizontal: 2,
                   borderRadius: 16,
@@ -392,13 +444,16 @@ export default function NetworkingChatScreen() {
                   <View style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
                     <MarkdownText text={props.currentMessage?.text || ''} color={textColor} codeBg={codeBg} codeColor={textColor} />
                   </View>
-                  {isCurrentUser ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 6, paddingBottom: 2 }}>
-                      <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, paddingBottom: 2, paddingTop: 2 }}>
+                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>
+                      {timeString}
+                    </Text>
+                    {isCurrentUser ? (
+                      <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 10, marginLeft: 6 }}>
                         {props.currentMessage?.received ? '✓✓' : props.currentMessage?.sent ? '✓' : ''}
                       </Text>
-                    </View>
-                  ) : null}
+                    ) : null}
+                  </View>
                 </View>
               </View>
             );

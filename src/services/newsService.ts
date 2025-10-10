@@ -128,12 +128,54 @@ export class NewsService {
       { url: 'https://feeds.bbci.co.uk/news/health/rss.xml', category: 'health' },
       { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', category: 'general' },
       
-      // Alternative reliable sources
+      // Technology
+      { url: 'https://www.engadget.com/rss.xml', category: 'technology' },
       { url: 'https://rss.cnet.com/rss/news/', category: 'technology' },
       { url: 'https://feeds.feedburner.com/oreilly/radar', category: 'technology' },
       { url: 'https://www.wired.com/feed/rss', category: 'technology' },
-      { url: 'https://feeds.feedburner.com/time/topstories', category: 'general' },
       { url: 'https://feeds.feedburner.com/TechCrunch/', category: 'technology' },
+      { url: 'https://www.theverge.com/rss/index.xml', category: 'technology' },
+      { url: 'https://feeds.arstechnica.com/arstechnica/index', category: 'technology' },
+      
+      // Science
+      { url: 'https://www.sciencedaily.com/rss/all.xml', category: 'science' },
+      { url: 'https://www.scientificamerican.com/feed/', category: 'science' },
+      { url: 'https://www.newscientist.com/feed/home', category: 'science' },
+      
+      // Health & Medicine
+      { url: 'https://www.medicalnewstoday.com/rss', category: 'health' },
+      { url: 'https://www.healthline.com/rss', category: 'health' },
+      { url: 'https://www.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC', category: 'health' },
+      
+      // Business & Finance
+      { url: 'https://feeds.bloomberg.com/markets/news.rss', category: 'business' },
+      { url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html', category: 'business' },
+      { url: 'https://www.forbes.com/real-time/feed2/', category: 'business' },
+      
+      // Entertainment
+      { url: 'https://www.hollywoodreporter.com/feed/', category: 'entertainment' },
+      { url: 'https://variety.com/feed/', category: 'entertainment' },
+      { url: 'https://ew.com/feed/', category: 'entertainment' },
+      { url: 'https://www.rollingstone.com/feed/', category: 'entertainment' },
+      
+      // Sports
+      { url: 'https://www.espn.com/espn/rss/news', category: 'sports' },
+      { url: 'https://www.cbssports.com/rss/headlines/', category: 'sports' },
+      { url: 'https://www.si.com/rss/si_topstories.rss', category: 'sports' },
+      
+      // Reddit (diverse topics)
+      { url: 'https://www.reddit.com/r/technology/.rss', category: 'technology' },
+      { url: 'https://www.reddit.com/r/science/.rss', category: 'science' },
+      { url: 'https://www.reddit.com/r/worldnews/.rss', category: 'general' },
+      { url: 'https://www.reddit.com/r/entertainment/.rss', category: 'entertainment' },
+      { url: 'https://www.reddit.com/r/health/.rss', category: 'health' },
+      { url: 'https://www.reddit.com/r/business/.rss', category: 'business' },
+      { url: 'https://www.reddit.com/r/sports/.rss', category: 'sports' },
+      
+      // General News
+      { url: 'https://feeds.feedburner.com/time/topstories', category: 'general' },
+      { url: 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml', category: 'general' },
+      { url: 'https://www.theguardian.com/world/rss', category: 'general' },
     ];
 
     const articles: NewsArticle[] = [];

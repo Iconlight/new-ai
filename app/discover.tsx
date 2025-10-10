@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, RefreshControl, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Appbar, Button, IconButton, Text, useTheme } from 'react-native-paper';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
+import TopicSkeleton from '../components/ui/TopicSkeleton';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useChat } from '../src/contexts/ChatContext';
 import { getActiveFeedTopics, refreshForYouFeed, refreshInterestsFeed } from '../src/services/feedService';
@@ -289,7 +290,15 @@ export default function DiscoverScreen() {
     try {
       setStartingTopicId(topic.id);
       setNavLoading(true);
-      const newChat = await startChatWithAI(topic.message, topic.topic);
+      
+      // Extract news context from topic
+      const newsContext = topic.source_title ? {
+        title: topic.source_title,
+        url: topic.source_url,
+        category: topic.category,
+      } : undefined;
+      
+      const newChat = await startChatWithAI(topic.message, topic.topic, newsContext);
       if (newChat) {
         if (isUuid(String(topic.id))) {
           try { await markProactiveTopicAsSent(topic.id); } catch {}
@@ -414,7 +423,17 @@ export default function DiscoverScreen() {
         }
       >
         <View style={styles.content}>
-          {currentTopics.length > 0 ? (
+          {loading ? (
+            // Show skeleton loading
+            <>
+              <TopicSkeleton isRight={false} />
+              <TopicSkeleton isRight={true} />
+              <TopicSkeleton isRight={false} />
+              <TopicSkeleton isRight={true} />
+              <TopicSkeleton isRight={false} />
+              <TopicSkeleton isRight={true} />
+            </>
+          ) : currentTopics.length > 0 ? (
             currentTopics.map((topic, idx) => {
               const isRight = idx % 2 === 1;
               return (
