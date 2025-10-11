@@ -191,6 +191,19 @@ export async function refreshInterestsFeed(userId: string): Promise<void> {
   const uid = await resolveAuthedUserId(userId);
   console.log('✅ Resolved authenticated user:', uid);
 
+  // Delete old batches to ensure fresh content on refresh
+  const { error: deleteError } = await supabase
+    .from('feed_batches')
+    .delete()
+    .eq('user_id', uid)
+    .eq('feed_type', 'interests');
+  
+  if (deleteError) {
+    console.warn('⚠️ Error deleting old batches:', deleteError);
+  } else {
+    console.log('🗑️ Deleted old interests batches');
+  }
+
   // Load user interests
   const { data: interestsRows, error: interestsError } = await supabase
     .from('user_interests')
@@ -405,8 +418,12 @@ export async function refreshInterestsFeed(userId: string): Promise<void> {
     source_title: a.title,
   }));
 
-  await insertBatchTopics(uid, 'interests', batchId, items);
-  console.log('✅ Inserted', items.length, 'topics for interests feed');
+  // Randomize the order for TikTok-style mixed feed
+  const shuffledItems = items.sort(() => Math.random() - 0.5);
+  console.log('🎲 Shuffled interests feed for variety');
+
+  await insertBatchTopics(uid, 'interests', batchId, shuffledItems);
+  console.log('✅ Inserted', shuffledItems.length, 'topics for interests feed');
 }
 
 // Public: refresh the For You feed with mixed random categories and trending news
@@ -418,6 +435,19 @@ export async function refreshForYouFeed(userId: string): Promise<void> {
   
   const uid = await resolveAuthedUserId(userId);
   console.log('✅ Resolved authenticated user:', uid);
+
+  // Delete old batches to ensure fresh content on refresh
+  const { error: deleteError } = await supabase
+    .from('feed_batches')
+    .delete()
+    .eq('user_id', uid)
+    .eq('feed_type', 'foryou');
+  
+  if (deleteError) {
+    console.warn('⚠️ Error deleting old batches:', deleteError);
+  } else {
+    console.log('🗑️ Deleted old For You batches');
+  }
 
   // Clear cache to ensure fresh articles on each refresh
   await newsService.clearCache();
@@ -555,4 +585,98 @@ export async function markFeedTopicConsumed(topicId: string): Promise<void> {
     .update({ consumed_at: new Date().toISOString() })
     .eq('id', topicId);
   if (error) console.error('Error marking feed topic consumed:', error);
+}
+
+// Fetch next batch of topics for infinite scroll
+export async function fetchNextBatch(
+  userId: string,
+  feedType: FeedType,
+  page: number,
+  excludeUrls: string[] = []
+): Promise<ProactiveTopic[]> {
+  const ITEMS_PER_PAGE = 15;
+  // Initial load: 15 sources for speed, subsequent loads: 10 sources
+  const SOURCES_PER_PAGE = page === 0 ? 15 : 10;
+  
+  console.log(`🔄 fetchNextBatch: page=${page}, feedType=${feedType}, excludeUrls=${excludeUrls.length}`);
+  
+  try {
+    const uid = await resolveAuthedUserId(userId);
+    
+    // Get rotated sources for this page
+    const allSources = newsService.getAllSources();
+    const sources = getSourcesForPage(allSources, page, SOURCES_PER_PAGE);
+    
+    console.log(`📡 Fetching from ${sources.length} sources for page ${page}`);
+    
+    // Fetch articles from these sources
+    const articles = await newsService.fetchFromSources(sources);
+    
+    // Filter out already shown articles
+    const newArticles = articles.filter(a => !excludeUrls.includes(a.url));
+    
+    console.log(`📰 Got ${articles.length} articles, ${newArticles.length} are new`);
+    
+    // Shuffle and take ITEMS_PER_PAGE
+    const shuffled = newArticles.sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, ITEMS_PER_PAGE);
+    
+    // Convert to topics
+    const topics: ProactiveTopic[] = selected.map((article, idx) => {
+      const categoryEmoji = {
+        'technology': '💻',
+        'science': '🔬',
+        'entertainment': '🎬',
+        'business': '💼',
+        'health': '🏥',
+        'sports': '⚽',
+        'environment': '🌍',
+        'general': '📰'
+      }[article.category || 'general'] || '📰';
+      
+      return {
+        id: `feed-${article.id}-p${page}-${idx}`,
+        user_id: uid,
+        topic: `${categoryEmoji} ${article.category || 'News'}`,
+        message: buildStarter({
+          feedType,
+          title: article.title,
+          description: article.description,
+          category: article.category,
+        }),
+        interests: [article.category || 'general'],
+        scheduled_for: new Date().toISOString(),
+        is_sent: false,
+        created_at: new Date().toISOString(),
+        source_url: article.url,
+        source_title: article.title,
+        source_type: 'news',
+        category: article.category,
+      };
+    });
+    
+    console.log(`✅ Returning ${topics.length} topics for page ${page}`);
+    return topics;
+  } catch (error) {
+    console.error('❌ Error in fetchNextBatch:', error);
+    return [];
+  }
+}
+
+// Source rotation logic for pagination
+function getSourcesForPage(
+  allSources: Array<{url: string, category: string}>,
+  page: number,
+  count: number
+): Array<{url: string, category: string}> {
+  const startIndex = (page * count) % allSources.length;
+  
+  // Circular rotation through sources
+  const selected = [];
+  for (let i = 0; i < count; i++) {
+    const index = (startIndex + i) % allSources.length;
+    selected.push(allSources[index]);
+  }
+  
+  return selected;
 }

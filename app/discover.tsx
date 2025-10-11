@@ -3,13 +3,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, PanResponder, RefreshControl, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, PanResponder, RefreshControl, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View, NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator } from 'react-native';
 import { Appbar, Button, IconButton, Text, useTheme } from 'react-native-paper';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
 import TopicSkeleton from '../components/ui/TopicSkeleton';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useChat } from '../src/contexts/ChatContext';
-import { getActiveFeedTopics, refreshForYouFeed, refreshInterestsFeed } from '../src/services/feedService';
+import { getActiveFeedTopics, refreshForYouFeed, refreshInterestsFeed, fetchNextBatch } from '../src/services/feedService';
 import { clearProactiveCache, markProactiveTopicAsSent } from '../src/services/proactiveAI';
 import { supabase } from '../src/services/supabase';
 import { ProactiveTopic } from '../src/types';
@@ -28,6 +28,15 @@ export default function DiscoverScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [unreadNetworkingCount, setUnreadNetworkingCount] = useState(0);
   const drawerTranslateX = useRef(new Animated.Value(-300)).current;
+
+  // Infinite scroll state
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreForYou, setHasMoreForYou] = useState(true);
+  const [hasMoreInterests, setHasMoreInterests] = useState(true);
+  const [forYouPage, setForYouPage] = useState(0);
+  const [interestsPage, setInterestsPage] = useState(0);
+  const [shownForYouIds, setShownForYouIds] = useState<Set<string>>(new Set());
+  const [shownInterestsIds, setShownInterestsIds] = useState<Set<string>>(new Set());
 
   // Helper: only UUIDs correspond to DB-backed proactive_topics
   const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
@@ -211,6 +220,7 @@ export default function DiscoverScreen() {
   const loadTodaysTopics = async () => {
     if (!user) return;
     try {
+      setLoading(true);
       const topics = await getActiveFeedTopics(user.id, 'interests');
       setTodaysTopics(topics);
       if (topics.length === 0) {
@@ -220,6 +230,8 @@ export default function DiscoverScreen() {
       }
     } catch (error) {
       console.error('Error loading topics:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -262,8 +274,90 @@ export default function DiscoverScreen() {
       console.error('Error refreshing:', error);
     } finally {
       setRefreshing(false);
+      // Reset pagination state on refresh
+      if (activeTab === 'interests') {
+        setInterestsPage(0);
+        setShownInterestsIds(new Set());
+        setHasMoreInterests(true);
+      } else {
+        setForYouPage(0);
+        setShownForYouIds(new Set());
+        setHasMoreForYou(true);
+      }
     }
   }, [activeTab, user]);
+
+  // Scroll handler for infinite scroll
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 500; // Trigger 500px before bottom
+    
+    const isNearBottom = 
+      layoutMeasurement.height + contentOffset.y >= 
+      contentSize.height - paddingToBottom;
+    
+    const hasMore = activeTab === 'interests' ? hasMoreInterests : hasMoreForYou;
+    
+    if (isNearBottom && !loadingMore && !loading && hasMore) {
+      loadMoreTopics();
+    }
+  };
+
+  // Load more topics for infinite scroll
+  const loadMoreTopics = async () => {
+    if (!user || loadingMore) return;
+    
+    const feedType = activeTab === 'interests' ? 'interests' : 'foryou';
+    const currentPage = activeTab === 'interests' ? interestsPage : forYouPage;
+    const shownIds = activeTab === 'interests' ? shownInterestsIds : shownForYouIds;
+    
+    setLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      console.log(`📄 Loading page ${nextPage} for ${feedType} feed...`);
+      
+      // Fetch next batch with exclusions
+      const newTopics = await fetchNextBatch(
+        user.id,
+        feedType,
+        nextPage,
+        Array.from(shownIds)
+      );
+      
+      if (newTopics.length === 0) {
+        console.log('📭 No more topics available');
+        if (activeTab === 'interests') {
+          setHasMoreInterests(false);
+        } else {
+          setHasMoreForYou(false);
+        }
+        return;
+      }
+      
+      // Update shown IDs
+      const newIds = new Set(shownIds);
+      newTopics.forEach(t => {
+        if (t.source_url) newIds.add(t.source_url);
+      });
+      
+      // Append new topics
+      if (activeTab === 'interests') {
+        setTodaysTopics(prev => [...prev, ...newTopics]);
+        setShownInterestsIds(newIds);
+        setInterestsPage(nextPage);
+      } else {
+        setForYouTopics(prev => [...prev, ...newTopics]);
+        setShownForYouIds(newIds);
+        setForYouPage(nextPage);
+      }
+      
+      console.log(`✅ Loaded ${newTopics.length} more topics (page ${nextPage})`);
+    } catch (error) {
+      console.error('Error loading more topics:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const formatTopicMessage = (raw: string): string => {
     if (!raw) return '';
@@ -411,6 +505,8 @@ export default function DiscoverScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         alwaysBounceVertical={true}
+        onScroll={handleScroll}
+        scrollEventThrottle={400}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -472,6 +568,29 @@ export default function DiscoverScreen() {
               </Text>
               <Text variant="bodyLarge" style={styles.emptySubtitle}>
                 Pull down to refresh and get new conversation starters
+              </Text>
+            </View>
+          )}
+
+          {/* Loading More Indicator */}
+          {loadingMore && currentTopics.length > 0 && (
+            <View style={styles.loadingMore}>
+              <ActivityIndicator size="large" color="#C084FC" />
+              <Text variant="bodyMedium" style={styles.loadingMoreText}>
+                Loading more topics...
+              </Text>
+            </View>
+          )}
+
+          {/* End of Feed Message */}
+          {!loadingMore && !loading && currentTopics.length > 0 && 
+           !(activeTab === 'interests' ? hasMoreInterests : hasMoreForYou) && (
+            <View style={styles.endMessage}>
+              <Text variant="titleMedium" style={styles.endText}>
+                🎉 You've seen all available topics!
+              </Text>
+              <Text variant="bodyMedium" style={styles.endSubtext}>
+                Pull down to refresh for new content
               </Text>
             </View>
           )}
@@ -705,6 +824,33 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     textAlign: 'center',
     color: 'rgba(237,233,254,0.8)',
+  },
+  loadingMore: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  loadingMoreText: {
+    color: '#C084FC',
+    textAlign: 'center',
+  },
+  endMessage: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 8,
+  },
+  endText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  endSubtext: {
+    color: 'rgba(237,233,254,0.7)',
+    textAlign: 'center',
   },
   drawer: {
     position: 'absolute',

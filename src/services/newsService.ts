@@ -49,6 +49,16 @@ export class NewsService {
     this.lastFetch = null;
   }
 
+  // Get all RSS sources (for pagination)
+  getAllSources(): Array<{url: string, category: string}> {
+    return this.rssSources;
+  }
+
+  // Fetch from specific sources (for pagination)
+  async fetchFromSources(sources: Array<{url: string, category: string}>): Promise<NewsArticle[]> {
+    return this.fetchFromSpecificSources(sources);
+  }
+
   async fetchCurrentNews(categories: string[] = ['general', 'technology', 'science', 'business', 'health', 'entertainment', 'sports']): Promise<NewsArticle[]> {
     // Return cached news if still fresh
     if (this.cachedNews.length > 0 && this.lastFetch && 
@@ -115,18 +125,31 @@ export class NewsService {
     return articles;
   }
 
-  private async fetchFromFreeSource(): Promise<NewsArticle[]> {
+  private async fetchFromFreeSource(sourcesToFetch?: typeof this.rssSources): Promise<NewsArticle[]> {
     console.log('📡 Fetching real news from RSS feeds...');
     
-    // Real RSS feeds from trusted sources (mobile-friendly)
-    const rssSources = [
-      // BBC feeds (most reliable)
+    // Use provided sources or all sources
+    const rssSources = sourcesToFetch || this.rssSources;
+    
+    return this.fetchFromSpecificSources(rssSources);
+  }
+
+  // All RSS sources (moved to class property for reusability)
+  // Ordered by speed/reliability - fast sources first for better initial load
+  private rssSources = [
+      // BBC feeds (most reliable and FAST - prioritized)
       { url: 'https://feeds.bbci.co.uk/news/technology/rss.xml', category: 'technology' },
       { url: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml', category: 'science' },
-      { url: 'https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml', category: 'entertainment' },
       { url: 'https://feeds.bbci.co.uk/news/business/rss.xml', category: 'business' },
       { url: 'https://feeds.bbci.co.uk/news/health/rss.xml', category: 'health' },
       { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', category: 'general' },
+      
+      // Reddit (FAST - prioritized)
+      { url: 'https://www.reddit.com/r/technology/.rss', category: 'technology' },
+      { url: 'https://www.reddit.com/r/science/.rss', category: 'science' },
+      { url: 'https://www.reddit.com/r/worldnews/.rss', category: 'general' },
+      { url: 'https://www.reddit.com/r/business/.rss', category: 'business' },
+      { url: 'https://www.reddit.com/r/health/.rss', category: 'health' },
       
       // Technology
       { url: 'https://www.engadget.com/rss.xml', category: 'technology' },
@@ -163,13 +186,8 @@ export class NewsService {
       { url: 'https://www.cbssports.com/rss/headlines/', category: 'sports' },
       { url: 'https://www.si.com/rss/si_topstories.rss', category: 'sports' },
       
-      // Reddit (diverse topics)
-      { url: 'https://www.reddit.com/r/technology/.rss', category: 'technology' },
-      { url: 'https://www.reddit.com/r/science/.rss', category: 'science' },
-      { url: 'https://www.reddit.com/r/worldnews/.rss', category: 'general' },
+      // More Reddit (diverse topics)
       { url: 'https://www.reddit.com/r/entertainment/.rss', category: 'entertainment' },
-      { url: 'https://www.reddit.com/r/health/.rss', category: 'health' },
-      { url: 'https://www.reddit.com/r/business/.rss', category: 'business' },
       { url: 'https://www.reddit.com/r/sports/.rss', category: 'sports' },
       
       // General News
@@ -178,48 +196,67 @@ export class NewsService {
       { url: 'https://www.theguardian.com/world/rss', category: 'general' },
     ];
 
+  // Parallel fetching with batching for better performance
+  private async fetchFromSpecificSources(sources: Array<{url: string, category: string}>): Promise<NewsArticle[]> {
+    const BATCH_SIZE = 15; // Fetch 15 sources in parallel (increased for speed)
+    const TIMEOUT_MS = 3000; // Reduced to 3 seconds for faster loading
     const articles: NewsArticle[] = [];
     
-    for (const source of rssSources) {
-      try {
-        console.log(`📡 Fetching from ${source.url}...`);
-        
-        // Add timeout to prevent hanging requests
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-        
-        const response = await fetch(source.url, {
-          headers: {
-            'User-Agent': 'ProactiveAI/1.0',
-            'Accept': 'application/rss+xml, application/xml, text/xml',
-          },
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          console.warn(`⚠️ Failed to fetch ${source.url}: ${response.status} ${response.statusText}`);
-          continue;
+    console.log(`📡 Fetching from ${sources.length} sources in batches of ${BATCH_SIZE}...`);
+    
+    // Process sources in batches
+    for (let i = 0; i < sources.length; i += BATCH_SIZE) {
+      const batch = sources.slice(i, i + BATCH_SIZE);
+      console.log(`📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(sources.length / BATCH_SIZE)}`);
+      
+      // Fetch batch in parallel using Promise.allSettled
+      const batchPromises = batch.map(source => this.fetchSingleSource(source, TIMEOUT_MS));
+      const results = await Promise.allSettled(batchPromises);
+      
+      // Collect successful results
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.length > 0) {
+          articles.push(...result.value);
+          console.log(`✅ Got ${result.value.length} articles from ${batch[index].url}`);
+        } else if (result.status === 'rejected') {
+          console.warn(`⚠️ Failed to fetch ${batch[index].url}`);
         }
-        
-        const xmlText = await response.text();
-        const parsedArticles = this.parseRSSFeed(xmlText, source.category);
-        articles.push(...parsedArticles);
-        console.log(`✅ Got ${parsedArticles.length} articles from ${source.url}`);
-        
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          console.warn(`⏰ Timeout fetching ${source.url}`);
-        } else {
-          console.warn(`⚠️ Skipping ${source.url}: ${error.message}`);
-        }
-        // Continue with other sources instead of failing completely
-      }
+      });
     }
     
-    console.log(`📰 Total real articles fetched: ${articles.length}`);
-    return articles; // Return all articles for better category distribution
+    console.log(`📰 Total articles fetched: ${articles.length} from ${sources.length} sources`);
+    return articles;
+  }
+
+  // Fetch a single RSS source with timeout
+  private async fetchSingleSource(source: {url: string, category: string}, timeoutMs: number): Promise<NewsArticle[]> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    try {
+      const response = await fetch(source.url, {
+        headers: {
+          'User-Agent': 'ProactiveAI/1.0',
+          'Accept': 'application/rss+xml, application/xml, text/xml',
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const xmlText = await response.text();
+      return this.parseRSSFeed(xmlText, source.category);
+    } catch (error: unknown) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Timeout after ${timeoutMs}ms`);
+      }
+      throw error;
+    }
   }
 
   private parseRSSFeed(xmlText: string, category: string): NewsArticle[] {
