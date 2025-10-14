@@ -145,46 +145,35 @@ export default function DiscoverScreen() {
     }).start();
   }, [drawerOpen]);
 
-  // Left-edge swipe to open drawer
+  // Swipe right from anywhere to open drawer
   const edgePanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: (evt, gestureState) => {
-        console.log('[EdgeGesture] Start at x:', evt.nativeEvent.pageX, 'y:', evt.nativeEvent.pageY);
-        // Don't capture touches in the hamburger button area (top 100px to be safe)
-        if (evt.nativeEvent.pageY < 100) {
-          console.log('[EdgeGesture] Ignoring touch in header area, y:', evt.nativeEvent.pageY);
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
+        // Don't capture touches in the header area (top 80px)
+        if (evt.nativeEvent.pageY < 80) {
           return false;
         }
-        return true;
+        // Detect swipe right gesture (horizontal swipe to the right)
+        const isSwipeRight = gestureState.dx > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        return isSwipeRight;
       },
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // Also check Y coordinate here as a backup
-        if (evt.nativeEvent.pageY < 100) {
-          console.log('[EdgeGesture] Ignoring move in header area, y:', evt.nativeEvent.pageY);
-          return false;
-        }
-        const shouldSet = Math.abs(gestureState.dx) > 5 && gestureState.dx > 0;
-        if (shouldSet) console.log('[EdgeGesture] Moving right, dx:', gestureState.dx);
-        return shouldSet;
+        // Secondary check (in case capture didn't run)
+        if (evt.nativeEvent.pageY < 80) return false;
+        return gestureState.dx > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
       },
       onPanResponderGrant: () => {
-        console.log('[EdgeGesture] Gesture granted');
+        console.log('[SwipeGesture] Swipe right detected');
       },
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dx > 0) {
-          const tx = Math.min(0, -300 + gestureState.dx);
-          drawerTranslateX.setValue(tx);
-        }
+      onPanResponderMove: () => {
+        // Don't track movement - just detect the gesture
       },
       onPanResponderRelease: (evt, gestureState) => {
-        console.log('[EdgeGesture] Release dx:', gestureState.dx, 'vx:', gestureState.vx);
-        if (gestureState.dx > 30 || gestureState.vx > 0.35) {
-          console.log('[EdgeGesture] Opening drawer');
-          setDrawerOpen(true);
-        } else {
-          console.log('[EdgeGesture] Closing drawer');
-          setDrawerOpen(false);
-        }
+        console.log('[SwipeGesture] Swipe right - opening drawer');
+        // Any swipe right opens the drawer fully
+        setDrawerOpen(true);
       },
     })
   ).current;
@@ -193,18 +182,13 @@ export default function DiscoverScreen() {
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (e, g) => Math.abs(g.dx) > Math.abs(g.dy) && g.dx < -8,
-      onPanResponderMove: (e, g) => {
-        if (g.dx < 0) {
-          const tx = Math.max(-300, g.dx);
-          drawerTranslateX.setValue(tx);
-        }
+      onPanResponderMove: () => {
+        // Don't track movement - just detect the gesture
       },
       onPanResponderRelease: (e, g) => {
-        if (g.dx < -30 || g.vx < -0.35) {
-          setDrawerOpen(false);
-        } else {
-          setDrawerOpen(true);
-        }
+        console.log('[SwipeGesture] Swipe left - closing drawer');
+        // Any swipe left closes the drawer fully
+        setDrawerOpen(false);
       },
     })
   ).current;
@@ -375,6 +359,23 @@ export default function DiscoverScreen() {
     } catch {}
     s = s.replace(/^\[+\s*/, '').replace(/\s*\]+$/, '');
     s = s.replace(/^"+\s*/, '').replace(/\s*"+$/, '');
+    
+    // Decode HTML entities like &apos; &#39; etc.
+    s = s.replace(/&apos;/g, "'")
+         .replace(/&#39;/g, "'")
+         .replace(/&quot;/g, '"')
+         .replace(/&#34;/g, '"')
+         .replace(/&amp;/g, '&')
+         .replace(/&lt;/g, '<')
+         .replace(/&gt;/g, '>')
+         .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec));
+    
+    // Remove weird number sequences and noise patterns
+    s = s.replace(/\b\d{8,}\b/g, '') // Remove long number sequences (8+ digits)
+         .replace(/[^\w\s.,!?'"()-]/g, ' ') // Remove unusual characters
+         .replace(/\s+/g, ' ') // Normalize whitespace
+         .trim();
+    
     const firstLine = s.split('\n').map(l => l.trim()).find(Boolean);
     return firstLine || 'Tap to start this conversation';
   };
@@ -431,72 +432,80 @@ export default function DiscoverScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.gradientBg}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]}>
-        <Appbar.Header style={styles.glassHeader}>
-          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
-          <Appbar.Action 
-            icon="menu" 
-            color="#ffffff"
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: 'transparent' }]}
+        {...edgePanResponder.panHandlers}
+      >
+        {/* Floating Header */}
+        <View style={styles.floatingHeader}>
+          {/* Menu Button */}
+          <TouchableOpacity
+            activeOpacity={0.8}
             onPress={() => setDrawerOpen(true)}
-          />
-          <Appbar.Content title="ProactiveAI" titleStyle={{ color: '#ffffff' }} />
+            style={styles.headerButton}
+          >
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <Text style={styles.headerIcon}>☰</Text>
+          </TouchableOpacity>
+
+          {/* Title - Floating Text */}
+          <Text style={styles.headerTitleText}>ProactiveAI</Text>
+
+          {/* Networking Button - Icon Only */}
           <View style={{ position: 'relative' }}>
-            <Appbar.Action 
+            <IconButton
               icon="account-group"
-              color="#ffffff" 
-              onPress={() => router.push('/networking')} 
+              iconColor="#ffffff"
+              size={24}
+              onPress={() => router.push('/networking')}
+              style={styles.iconButton}
             />
             {unreadNetworkingCount > 0 && (
-              <View style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                width: 12,
-                height: 12,
-                borderRadius: 6,
-                backgroundColor: '#EF4444',
-                borderWidth: 2,
-                borderColor: '#160427',
-              }} />
+              <View style={styles.notificationBadge} />
             )}
           </View>
-          <Appbar.Action 
+
+          {/* Profile Button - Icon Only */}
+          <IconButton
             icon="account"
-            color="#ffffff" 
-            onPress={() => router.push('/profile')} 
+            iconColor="#ffffff"
+            size={24}
+            onPress={() => router.push('/profile')}
+            style={styles.iconButton}
           />
-        </Appbar.Header>
-
-      {/* Left-edge gesture catcher for opening the drawer */}
-      <View
-        style={styles.edgeCatcher}
-        pointerEvents={drawerOpen ? 'none' : 'box-only'}
-        {...edgePanResponder.panHandlers}
-      />
-
-      {/* Sticky Tab Bar */}
-      <View style={[styles.stickyTabs, styles.glassTabs]}>
-        <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
-        <View style={styles.tabRow}>
-          <Button
-            mode={activeTab === 'foryou' ? 'contained' : 'outlined'}
-            style={[styles.tabButton, activeTab === 'foryou' ? styles.tabContained : styles.tabOutlined]}
-            buttonColor={activeTab === 'foryou' ? 'rgba(255,255,255,0.10)' : undefined}
-            textColor={activeTab === 'foryou' ? '#ffffff' : 'rgba(255,255,255,0.85)'}
-            onPress={() => setActiveTab('foryou')}
-          >
-            For You
-          </Button>
-          <Button
-            mode={activeTab === 'interests' ? 'contained' : 'outlined'}
-            style={[styles.tabButton, activeTab === 'interests' ? styles.tabContained : styles.tabOutlined]}
-            buttonColor={activeTab === 'interests' ? 'rgba(255,255,255,0.10)' : undefined}
-            textColor={activeTab === 'interests' ? '#ffffff' : 'rgba(255,255,255,0.85)'}
-            onPress={() => setActiveTab('interests')}
-          >
-            Interests
-          </Button>
         </View>
+
+      {/* Floating Tab Buttons */}
+      <View style={styles.floatingTabContainer}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setActiveTab('foryou')}
+          style={[styles.floatingTab, activeTab === 'foryou' && styles.floatingTabActive]}
+        >
+          {activeTab === 'foryou' ? (
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+          ) : (
+            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+          )}
+          <Text style={[styles.floatingTabText, activeTab === 'foryou' && styles.floatingTabTextActive]}>
+            For You
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setActiveTab('interests')}
+          style={[styles.floatingTab, activeTab === 'interests' && styles.floatingTabActive]}
+        >
+          {activeTab === 'interests' ? (
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+          ) : (
+            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+          )}
+          <Text style={[styles.floatingTabText, activeTab === 'interests' && styles.floatingTabTextActive]}>
+            Interests
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Main Content with Pull-to-Refresh */}
@@ -516,49 +525,46 @@ export default function DiscoverScreen() {
             progressBackgroundColor={'rgba(255,255,255,0.08)'}
             progressViewOffset={0}
           />
-        }
-      >
+        }>
         <View style={styles.content}>
           {loading ? (
             // Show skeleton loading
             <>
-              <TopicSkeleton isRight={false} />
-              <TopicSkeleton isRight={true} />
-              <TopicSkeleton isRight={false} />
-              <TopicSkeleton isRight={true} />
-              <TopicSkeleton isRight={false} />
-              <TopicSkeleton isRight={true} />
+              <TopicSkeleton />
+              <TopicSkeleton />
+              <TopicSkeleton />
+              <TopicSkeleton />
+              <TopicSkeleton />
+              <TopicSkeleton />
             </>
           ) : currentTopics.length > 0 ? (
             currentTopics.map((topic, idx) => {
-              const isRight = idx % 2 === 1;
               return (
-                <View key={topic.id} style={[styles.bubbleRow, isRight ? styles.rowRight : styles.rowLeft]}>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => handleStartTopic(topic)}
-                    disabled={startingTopicId === topic.id}
-                    style={[styles.bubble, isRight ? styles.bubbleRight : styles.bubbleLeft]}
-                  >
-                    <Text variant="titleSmall" style={styles.bubbleTitle}>
-                      {topic.topic}
+                <TouchableOpacity
+                  key={topic.id}
+                  activeOpacity={0.8}
+                  onPress={() => handleStartTopic(topic)}
+                  disabled={startingTopicId === topic.id}
+                  style={styles.topicCard}
+                >
+                  <Text variant="titleSmall" style={styles.cardTitle}>
+                    {topic.topic}
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.cardMessage}>
+                    {formatTopicMessage(topic.message)}
+                  </Text>
+                  <View style={styles.cardMeta}>
+                    <Text variant="bodySmall" style={styles.metaText}>
+                      {new Date(topic.scheduled_for).toLocaleTimeString()}
                     </Text>
-                    <Text variant="bodyMedium" style={styles.bubbleMessage}>
-                      {formatTopicMessage(topic.message)}
-                    </Text>
-                    <View style={styles.bubbleMeta}>
+                    {topic.interests.length > 0 && (
                       <Text variant="bodySmall" style={styles.metaText}>
-                        {new Date(topic.scheduled_for).toLocaleTimeString()}
+                        {topic.interests.slice(0, 2).join(', ')}
+                        {topic.interests.length > 2 && ` +${topic.interests.length - 2}`}
                       </Text>
-                      {topic.interests.length > 0 && (
-                        <Text variant="bodySmall" style={styles.metaText}>
-                          {topic.interests.slice(0, 2).join(', ')}
-                          {topic.interests.length > 2 && ` +${topic.interests.length - 2}`}
-                        </Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
               );
             })
           ) : (
@@ -721,37 +727,43 @@ const styles = StyleSheet.create({
     right: -50,
     opacity: 0.28,
   },
-  stickyTabs: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    elevation: 2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  glassTabs: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    marginHorizontal: 12,
-    marginTop: 8,
-    borderRadius: 16,
-  },
-  tabRow: {
+  floatingTabContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  tabButton: {
+  floatingTab: {
     flex: 1,
-  },
-  tabContained: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  tabOutlined: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'transparent',
+  floatingTabActive: {
+    backgroundColor: 'rgba(192,132,252,0.15)',
+    borderColor: 'rgba(192,132,252,0.4)',
+    shadowColor: '#C084FC',
+    shadowOpacity: 0.3,
+    elevation: 5,
+  },
+  floatingTabText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  floatingTabTextActive: {
+    color: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
@@ -762,46 +774,32 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
-  bubbleRow: {
-    flexDirection: 'row',
+  topicCard: {
+    width: '100%',
+    padding: 20,
     marginBottom: 12,
-  },
-  rowLeft: {
-    justifyContent: 'flex-start',
-  },
-  rowRight: {
-    justifyContent: 'flex-end',
-  },
-  bubble: {
-    maxWidth: '85%',
-    padding: 16,
-    borderRadius: 20,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    borderWidth: 1,
   },
-  bubbleLeft: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  bubbleRight: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  bubbleTitle: {
-    marginBottom: 6,
+  cardTitle: {
+    marginBottom: 8,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontSize: 16,
   },
-  bubbleMessage: {
+  cardMessage: {
     lineHeight: 22,
-    marginBottom: 8,
+    marginBottom: 12,
     color: '#EDE9FE',
   },
-  bubbleMeta: {
+  cardMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
@@ -938,12 +936,12 @@ const styles = StyleSheet.create({
     zIndex: 1200,
     backgroundColor: 'rgba(0,0,0,0.15)'
   },
-  edgeCatcher: {
+  swipeArea: {
     position: 'absolute',
-    top: 100, // Start well below the header
+    top: 80, // Start below the header
     left: 0,
+    right: 0,
     bottom: 0,
-    width: 50,
     zIndex: 1100,
     backgroundColor: 'transparent',
   },
@@ -960,14 +958,54 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingTop: 8,
   },
-  glassHeader: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 8,
+  floatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 8,
+  },
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitleText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  headerIcon: {
+    fontSize: 20,
+    color: '#FFFFFF',
+  },
+  iconButton: {
+    margin: 0,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: '#160427',
   },
 });

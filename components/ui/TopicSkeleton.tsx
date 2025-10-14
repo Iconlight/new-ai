@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 
 interface TopicSkeletonProps {
-  isRight?: boolean;
+  isRight?: boolean; // Kept for backwards compatibility but not used
 }
 
 export default function TopicSkeleton({ isRight = false }: TopicSkeletonProps) {
@@ -31,68 +31,50 @@ export default function TopicSkeleton({ isRight = false }: TopicSkeletonProps) {
   });
 
   return (
-    <View style={[styles.bubbleRow, isRight ? styles.rowRight : styles.rowLeft]}>
-      <Animated.View
-        style={[
-          styles.bubble,
-          isRight ? styles.bubbleRight : styles.bubbleLeft,
-          { opacity },
-        ]}
-      >
-        {/* Title skeleton */}
-        <View style={[styles.skeletonLine, styles.titleLine]} />
-        
-        {/* Message skeleton - 2 lines */}
-        <View style={[styles.skeletonLine, styles.messageLine, { marginTop: 8 }]} />
-        <View style={[styles.skeletonLine, styles.messageLine, { width: '70%', marginTop: 4 }]} />
-        
-        {/* Meta skeleton */}
-        <View style={[styles.metaRow, { marginTop: 12 }]}>
-          <View style={[styles.skeletonLine, styles.metaLine]} />
-          <View style={[styles.skeletonLine, styles.metaLine]} />
-        </View>
-      </Animated.View>
-    </View>
+    <Animated.View
+      style={[
+        styles.card,
+        { opacity },
+      ]}
+    >
+      {/* Title skeleton */}
+      <View style={[styles.skeletonLine, styles.titleLine]} />
+      
+      {/* Message skeleton - 2 lines */}
+      <View style={[styles.skeletonLine, styles.messageLine, { marginTop: 10 }]} />
+      <View style={[styles.skeletonLine, styles.messageLine, { width: '70%', marginTop: 6 }]} />
+      
+      {/* Meta skeleton */}
+      <View style={[styles.metaRow, { marginTop: 14 }]}>
+        <View style={[styles.skeletonLine, styles.metaLine]} />
+        <View style={[styles.skeletonLine, styles.metaLine]} />
+      </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  bubbleRow: {
-    flexDirection: 'row',
+  card: {
+    width: '100%',
+    padding: 20,
     marginBottom: 12,
-  },
-  rowLeft: {
-    justifyContent: 'flex-start',
-  },
-  rowRight: {
-    justifyContent: 'flex-end',
-  },
-  bubble: {
-    width: '85%',
-    minWidth: '85%',
-    padding: 16,
-    borderRadius: 20,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-  },
-  bubbleLeft: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  bubbleRight: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   skeletonLine: {
     height: 12,
     borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   titleLine: {
-    width: '60%',
-    height: 16,
+    width: '50%',
+    height: 18,
   },
   messageLine: {
     width: '100%',
+    height: 14,
   },
   metaRow: {
     flexDirection: 'row',
@@ -100,7 +82,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   metaLine: {
-    width: '35%',
+    width: '30%',
     height: 10,
   },
 });

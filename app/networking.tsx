@@ -477,22 +477,32 @@ function NetworkingScreenContent() {
         )}
 
         {match.status === 'pending' && (
-          <View style={styles.actionButtons}>
-            <Button 
-              mode="contained" 
-              onPress={() => handleAcceptMatch(match.id)}
-              style={styles.acceptButton}
-            >
-              Connect
-            </Button>
+          <>
             <Button 
               mode="outlined" 
-              onPress={() => handleDeclineMatch(match.id)}
-              style={styles.declineButton}
+              onPress={() => router.push({ pathname: '/networking/intelligence/[matchId]', params: { matchId: match.id } })}
+              style={styles.askAIButton}
+              icon="brain"
             >
-              Pass
+              Ask AI About Them
             </Button>
-          </View>
+            <View style={styles.actionButtons}>
+              <Button 
+                mode="contained" 
+                onPress={() => handleAcceptMatch(match.id)}
+                style={styles.acceptButton}
+              >
+                Connect
+              </Button>
+              <Button 
+                mode="outlined" 
+                onPress={() => handleDeclineMatch(match.id)}
+                style={styles.declineButton}
+              >
+                Pass
+              </Button>
+            </View>
+          </>
         )}
 
         {match.status === 'accepted' && (
@@ -857,6 +867,11 @@ const styles = StyleSheet.create({
   interestChip: {
     marginRight: 4,
     marginBottom: 4,
+  },
+  askAIButton: {
+    marginBottom: 12,
+    borderColor: '#7C3AED',
+    borderWidth: 1,
   },
   actionButtons: {
     flexDirection: 'row',

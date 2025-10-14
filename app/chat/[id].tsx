@@ -220,6 +220,8 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
     borderBottomWidth: 0,
+    height: 56,
+    justifyContent: 'center',
   },
   orbA: {
     position: 'absolute',

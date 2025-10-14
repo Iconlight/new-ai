@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(true); // Default to true until we check
 
   useEffect(() => {
     let isMounted = true;

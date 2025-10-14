@@ -84,21 +84,76 @@ Base your analysis on:
 - Intellectual curiosity: Desire to learn and understand
 - Emotional intelligence: Empathy and social awareness in conversations`;
 
-    // This would use your AI service - for now, return a mock pattern
-    // const aiResponse = await generateAIResponse([{ role: 'user', content: analysisPrompt }]);
+    // Get user's actual interests from user_interests table
+    const { data: userInterests } = await supabase
+      .from('user_interests')
+      .select('interest')
+      .eq('user_id', userId);
     
-    // Mock analysis for development
-    const mockPattern: ConversationPattern = {
+    const actualInterests = userInterests?.map(ui => ui.interest) || [];
+    
+    // If no interests found, skip pattern creation
+    if (actualInterests.length === 0) {
+      console.log('User has no interests, skipping pattern analysis');
+      return null;
+    }
+
+    // Analyze message patterns to determine communication style
+    const avgMessageLength = messages.reduce((sum, msg) => sum + msg.content.length, 0) / messages.length;
+    const questionCount = messages.filter(msg => msg.content.includes('?')).length;
+    const questionRatio = questionCount / messages.length;
+    
+    // Determine communication style based on message patterns
+    let communicationStyle: 'analytical' | 'creative' | 'empathetic' | 'direct' | 'philosophical' = 'analytical';
+    const hasPhilosophicalWords = messages.some(msg => 
+      /\b(why|meaning|purpose|existence|consciousness|philosophy|think about|wonder|believe)\b/i.test(msg.content)
+    );
+    const hasEmpatheticWords = messages.some(msg => 
+      /\b(feel|emotion|understand|empathy|care|support|help)\b/i.test(msg.content)
+    );
+    const hasCreativeWords = messages.some(msg => 
+      /\b(create|imagine|design|art|innovative|idea|vision)\b/i.test(msg.content)
+    );
+    
+    if (hasPhilosophicalWords && questionRatio > 0.3) {
+      communicationStyle = 'philosophical';
+    } else if (hasEmpatheticWords) {
+      communicationStyle = 'empathetic';
+    } else if (hasCreativeWords) {
+      communicationStyle = 'creative';
+    } else if (avgMessageLength < 100) {
+      communicationStyle = 'direct';
+    }
+    
+    // Determine response length
+    let responseLength: 'concise' | 'moderate' | 'detailed' = 'moderate';
+    if (avgMessageLength < 80) {
+      responseLength = 'concise';
+    } else if (avgMessageLength > 200) {
+      responseLength = 'detailed';
+    }
+    
+    // Extract conversation topics from messages
+    const conversationTopics = actualInterests.slice(0, 5); // Use interests as topics
+    
+    // Calculate metrics based on actual behavior
+    const curiosityLevel = Math.min(100, Math.round(questionRatio * 100 + 50));
+    const topicDepth = avgMessageLength > 150 ? 80 : 60;
+    const questionAsking = Math.min(100, Math.round(questionRatio * 150));
+    const intellectualCuriosity = hasPhilosophicalWords ? 85 : 70;
+    const emotionalIntelligence = hasEmpatheticWords ? 85 : 65;
+
+    const pattern: ConversationPattern = {
       userId,
-      communicationStyle: 'analytical',
-      curiosityLevel: 85,
-      topicDepth: 78,
-      questionAsking: 65,
-      responseLength: 'moderate',
-      interests: ['technology', 'philosophy', 'science'],
-      conversationTopics: ['AI development', 'future of work', 'consciousness'],
-      intellectualCuriosity: 90,
-      emotionalIntelligence: 72,
+      communicationStyle,
+      curiosityLevel,
+      topicDepth,
+      questionAsking,
+      responseLength,
+      interests: actualInterests,
+      conversationTopics,
+      intellectualCuriosity,
+      emotionalIntelligence,
       lastAnalyzed: new Date()
     };
 
@@ -107,21 +162,27 @@ Base your analysis on:
       .from('user_conversation_patterns')
       .upsert({
         user_id: userId,
-        communication_style: mockPattern.communicationStyle,
-        curiosity_level: mockPattern.curiosityLevel,
-        topic_depth: mockPattern.topicDepth,
-        question_asking: mockPattern.questionAsking,
-        response_length: mockPattern.responseLength,
-        interests: mockPattern.interests,
-        conversation_topics: mockPattern.conversationTopics,
-        intellectual_curiosity: mockPattern.intellectualCuriosity,
-        emotional_intelligence: mockPattern.emotionalIntelligence,
-        last_analyzed: mockPattern.lastAnalyzed.toISOString()
+        communication_style: pattern.communicationStyle,
+        curiosity_level: pattern.curiosityLevel,
+        topic_depth: pattern.topicDepth,
+        question_asking: pattern.questionAsking,
+        response_length: pattern.responseLength,
+        interests: pattern.interests,
+        conversation_topics: pattern.conversationTopics,
+        intellectual_curiosity: pattern.intellectualCuriosity,
+        emotional_intelligence: pattern.emotionalIntelligence,
+        last_analyzed: pattern.lastAnalyzed.toISOString()
       }, {
         onConflict: 'user_id'
       });
 
-    return mockPattern;
+    console.log(`✅ Analyzed pattern for user ${userId}:`, {
+      style: pattern.communicationStyle,
+      interests: pattern.interests.length,
+      curiosity: pattern.curiosityLevel
+    });
+
+    return pattern;
   } catch (error) {
     console.error('Error analyzing conversation pattern:', error);
     return null;
