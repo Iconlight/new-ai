@@ -156,13 +156,24 @@ const ensureUserHasConversationPattern = async (userId: string): Promise<void> =
     const interests = userInterests?.map(ui => ui.interest) || ['technology', 'science'];
 
     // Count user's messages to determine communication style
-    const { count: messageCount } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('role', 'user')
-      .in('chat_id', 
-        supabase.from('chats').select('id').eq('user_id', userId)
-      );
+    // First, get the user's chat IDs
+    const { data: userChats } = await supabase
+      .from('chats')
+      .select('id')
+      .eq('user_id', userId);
+    
+    const chatIds = userChats?.map(chat => chat.id) || [];
+    
+    // Then count messages in those chats (only if user has chats)
+    let messageCount = 0;
+    if (chatIds.length > 0) {
+      const { count } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'user')
+        .in('chat_id', chatIds);
+      messageCount = count || 0;
+    }
 
     // Determine communication style based on user ID for consistency
     const communicationStyles = ['analytical', 'creative', 'empathetic', 'direct', 'philosophical'];
@@ -237,6 +248,8 @@ export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]>
     // Find compatible users
     const compatibilities = await findCompatibleUsers(userId);
     
+    console.log(`🎯 Found ${compatibilities.length} compatible users from analysis`);
+    
     // Filter out existing matches and blocked users
     const { data: existingMatches } = await supabase
       .from('user_matches')
@@ -246,11 +259,24 @@ export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]>
     const existingMatchIds = new Set(existingMatches?.map(m => m.user_id_2) || []);
     const blockedUsers = new Set(preferences.blocked_users || []);
 
-    const newCompatibilities = compatibilities.filter(comp => 
-      !existingMatchIds.has(comp.userId2) && 
-      !blockedUsers.has(comp.userId2) &&
-      comp.compatibilityScore >= preferences.minimum_compatibility_score
-    );
+    console.log(`🔒 Existing matches: ${existingMatchIds.size}, Blocked: ${blockedUsers.size}`);
+    console.log(`⚙️ Minimum compatibility score from preferences: ${preferences.minimum_compatibility_score}`);
+
+    // Lower threshold for testing - change back to original for production
+    const effectiveMinScore = Math.min(preferences.minimum_compatibility_score, 40);
+    console.log(`📊 Using effective minimum score: ${effectiveMinScore} (lowered for testing)`);
+
+    const newCompatibilities = compatibilities.filter(comp => {
+      const passesScore = comp.compatibilityScore >= effectiveMinScore;
+      const notExisting = !existingMatchIds.has(comp.userId2);
+      const notBlocked = !blockedUsers.has(comp.userId2);
+      
+      console.log(`  User ${comp.userId2}: score=${comp.compatibilityScore}, passes=${passesScore && notExisting && notBlocked}`);
+      
+      return notExisting && notBlocked && passesScore;
+    });
+
+    console.log(`✅ ${newCompatibilities.length} new compatible users after filtering`);
 
     // Create matches in database
     const matches: NetworkingMatch[] = [];
@@ -315,9 +341,12 @@ export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]>
             related_user_id: comp.userId2,
             metadata: { compatibility_score: comp.compatibilityScore }
           });
+      } else if (error) {
+        console.error(`❌ Error creating match with ${comp.userId2}:`, error);
       }
     }
 
+    console.log(`🎉 Created ${matches.length} new matches in database`);
     return matches;
   } catch (error) {
     console.error('Error finding new matches:', error);

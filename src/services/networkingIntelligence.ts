@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { generateAIResponse } from './ai';
+import { generateCustomAIResponse } from './ai';
 
 export interface IntelligenceChatMessage {
   role: 'user' | 'assistant';
@@ -56,17 +56,34 @@ export const createIntelligenceChat = async (
  */
 const getTargetUserContext = async (targetUserId: string) => {
   try {
+    console.log('[NetworkingIntelligence] Fetching context for user:', targetUserId);
+    
     // Get conversation pattern
-    const { data: pattern } = await supabase
+    const { data: pattern, error: patternError } = await supabase
       .from('user_conversation_patterns')
       .select('*')
       .eq('user_id', targetUserId)
       .maybeSingle();
 
+    if (patternError) {
+      console.error('[NetworkingIntelligence] Error fetching pattern:', patternError);
+    } else {
+      console.log('[NetworkingIntelligence] Pattern data:', pattern ? 'Found' : 'Not found');
+      if (pattern) {
+        console.log('[NetworkingIntelligence] Pattern details:', {
+          style: pattern.communication_style,
+          interests: pattern.interests?.length || 0,
+          curiosity: pattern.curiosity_level
+        });
+      }
+    }
+
     // Get recent conversation topics (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    
-    const { data: messages } = await supabase
+
+    let messages: any[] | null = null;
+    let messagesError: any = null;
+    const recentRes = await supabase
       .from('messages')
       .select(`
         content,
@@ -74,24 +91,79 @@ const getTargetUserContext = async (targetUserId: string) => {
         chats!inner(user_id, title)
       `)
       .eq('chats.user_id', targetUserId)
-      .eq('role', 'user')
+      .in('role', ['user','assistant'])
       .gte('created_at', thirtyDaysAgo)
       .order('created_at', { ascending: false })
       .limit(100);
+    messages = recentRes.data as any[] | null;
+    messagesError = recentRes.error;
+
+    if (messagesError) {
+      console.error('[NetworkingIntelligence] Error fetching messages:', messagesError);
+    } else {
+      console.log('[NetworkingIntelligence] Messages fetched (30d window):', messages?.length || 0);
+      // Fallback: if no messages in 30d, try older history (no date filter, larger limit)
+      if (!messages || messages.length === 0) {
+        const olderRes = await supabase
+          .from('messages')
+          .select(`
+            content,
+            created_at,
+            chats!inner(user_id, title)
+          `)
+          .eq('chats.user_id', targetUserId)
+          .in('role', ['user','assistant'])
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (olderRes.error) {
+          console.error('[NetworkingIntelligence] Error fetching older messages:', olderRes.error);
+        } else {
+          messages = olderRes.data as any[] | null;
+          console.log('[NetworkingIntelligence] Messages fetched (all-time fallback):', messages?.length || 0);
+        }
+      }
+    }
 
     // Get user's interests
-    const { data: interests } = await supabase
+    const { data: interests, error: interestsError } = await supabase
       .from('user_interests')
       .select('interest')
       .eq('user_id', targetUserId);
 
-    return {
+    if (interestsError) {
+      console.error('[NetworkingIntelligence] Error fetching interests:', interestsError);
+    } else {
+      console.log('[NetworkingIntelligence] Interests fetched:', interests?.length || 0, interests?.map(i => i.interest));
+    }
+
+    // Merge interests from pattern and user_interests
+    const patternInterests: string[] = Array.isArray((pattern as any)?.interests)
+      ? ((pattern as any).interests as string[])
+      : [];
+    const interestsRows = (interests || []).map(i => i.interest).filter(Boolean);
+    const mergedInterests = Array.from(new Set([...
+      patternInterests.map(s => String(s).trim()).filter(Boolean),
+      ...interestsRows.map(s => String(s).trim()).filter(Boolean)
+    ]));
+
+    const context = {
       pattern: pattern || null,
       messages: messages || [],
-      interests: interests?.map(i => i.interest) || []
+      interests: mergedInterests
     };
+
+    console.log('[NetworkingIntelligence] Final context:', {
+      hasPattern: !!context.pattern,
+      messageCount: context.messages.length,
+      interestCount: context.interests.length
+    });
+    if (context.interests.length) {
+      console.log('[NetworkingIntelligence] Using merged interests:', context.interests);
+    }
+
+    return context;
   } catch (error) {
-    console.error('Error getting target user context:', error);
+    console.error('[NetworkingIntelligence] Error getting target user context:', error);
     return {
       pattern: null,
       messages: [],
@@ -103,8 +175,11 @@ const getTargetUserContext = async (targetUserId: string) => {
 /**
  * Analyzes conversation messages to extract themes and topics
  */
-const analyzeConversationThemes = (messages: any[]): string => {
+const analyzeConversationThemes = (messages: any[], fallbackInterests?: string[]): string => {
   if (!messages || messages.length === 0) {
+    if (fallbackInterests && fallbackInterests.length > 0) {
+      return `Likely topics based on interests: ${fallbackInterests.slice(0, 8).join(', ')}`;
+    }
     return 'Not enough conversation data available yet.';
   }
 
@@ -141,9 +216,17 @@ const analyzeConversationThemes = (messages: any[]): string => {
 /**
  * Extracts key conversation insights from messages
  */
-const extractConversationInsights = (messages: any[]): string => {
+const extractConversationInsights = (messages: any[], pattern?: any): string => {
   if (!messages || messages.length === 0) {
-    return 'Limited conversation history available.';
+    // Derive insights from pattern when messages are not available
+    const bits: string[] = [];
+    const style = pattern?.communication_style;
+    const curiosity = pattern?.curiosity_level;
+    const depth = pattern?.topic_depth;
+    if (style) bits.push(`Communication style appears ${style}`);
+    if (typeof curiosity === 'number') bits.push(`Curiosity level around ${curiosity}/100`);
+    if (typeof depth === 'number') bits.push(`Prefers topic depth around ${depth}/100`);
+    return bits.length ? bits.join('. ') + '.' : 'Limited conversation history available.';
   }
 
   const insights: string[] = [];
@@ -189,7 +272,8 @@ export const askAboutUser = async (
   chatId: string,
   userId: string,
   targetUserId: string,
-  question: string
+  question: string,
+  overrideName?: string
 ): Promise<string> => {
   try {
     // Check if target user allows intelligence analysis
@@ -215,58 +299,65 @@ export const askAboutUser = async (
 
     if (!chat) throw new Error('Chat not found');
 
-    // Get target user's name
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', targetUserId)
-      .single();
-
-    const targetName = profile?.full_name || 'this person';
+    // Get target user's name: prefer overrideName (from screen), then secured RPC, then profiles
+    let targetName = overrideName && overrideName.trim().length > 0 ? overrideName : 'this person';
+    if (!overrideName) {
+      try {
+        const { data: rpc } = await supabase.rpc('get_matched_user_profile', { target_user_id: targetUserId });
+        const p = Array.isArray(rpc) ? rpc?.[0] : rpc;
+        if (p && (p.full_name || p.email)) {
+          targetName = (p.full_name && p.full_name.trim().length > 0)
+            ? p.full_name
+            : (p.email && p.email.includes('@'))
+              ? p.email.split('@')[0]
+              : 'this person';
+          console.log('[NetworkingIntelligence] Target user via RPC:', targetName);
+        } else {
+          // Fallback: profiles select (RLS may allow due to match)
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', targetUserId)
+            .maybeSingle();
+          if (profile) {
+            targetName = (profile.full_name && profile.full_name.trim().length > 0)
+              ? profile.full_name
+              : (profile as any).email?.split?.('@')?.[0] || 'this person';
+            console.log('[NetworkingIntelligence] Target user via profiles:', targetName);
+          }
+        }
+      } catch (e) {
+        console.warn('[NetworkingIntelligence] Failed to fetch target user name:', (e as any)?.message || e);
+      }
+    }
+    console.log('[NetworkingIntelligence] Target user name (final):', targetName);
 
     // Analyze conversation themes
-    const themes = analyzeConversationThemes(context.messages);
-    const insights = extractConversationInsights(context.messages);
+    const themes = analyzeConversationThemes(context.messages, context.interests);
+    const insights = extractConversationInsights(context.messages, context.pattern);
 
-    // Build AI prompt with context
+    // Build AI prompt with context (explicitly authorize using the provided data)
     const systemPrompt = `You are a networking intelligence assistant helping a user learn about a potential connection named ${targetName}.
 
-CONTEXT ABOUT ${targetName.toUpperCase()}:
+DATA YOU MAY USE DIRECTLY:
+- Name: ${targetName}
+- Interests: ${context.interests.length > 0 ? context.interests.join(', ') : 'Not specified'}
+- Communication Style: ${context.pattern?.communication_style || 'Not yet analyzed'}
+- Curiosity Level: ${typeof context.pattern?.curiosity_level === 'number' ? context.pattern?.curiosity_level : 'Unknown'}/100
+- Topic Depth Preference: ${typeof context.pattern?.topic_depth === 'number' ? context.pattern?.topic_depth : 'Unknown'}/100
+- Derived Themes: ${themes}
+- Insights: ${insights}
+- Conversation Sample Size: ${context.messages.length}
 
-Communication Style: ${context.pattern?.communication_style || 'Not yet analyzed'}
-Interests: ${context.interests.length > 0 ? context.interests.join(', ') : 'Not specified'}
-Curiosity Level: ${context.pattern?.curiosity_level || 'Unknown'}/100
-Topic Depth Preference: ${context.pattern?.topic_depth || 'Unknown'}/100
-Response Style: ${context.pattern?.response_length || 'Unknown'}
+IMPORTANT INSTRUCTIONS:
+- If the above fields are present, you DO have access to them. Use them directly.
+- Do NOT say you "don’t have access" to the user's name, interests, communication style, or themes if they are listed above.
+- Be specific with what is known, and say "not enough data" only for fields that are actually missing.
+- Do NOT reveal personal information (location, work, contact details) and do NOT quote exact messages.
+- Summarize themes and perspectives; avoid sensitive/emotional topics.
+- Keep responses concise (2–4 sentences), helpful, and friendly.
 
-RECENT CONVERSATION THEMES:
-${themes}
-
-CONVERSATION INSIGHTS:
-${insights}
-
-CONVERSATION SAMPLE SIZE: ${context.messages.length} messages analyzed
-
-GUIDELINES:
-1. Answer questions about ${targetName}'s interests, perspectives, and conversation patterns
-2. Base answers on their conversation history and patterns - be specific when data supports it
-3. Be respectful and encouraging - focus on intellectual compatibility
-4. If asked about something not in the data, honestly say you don't have enough information
-5. Keep responses conversational and helpful (2-4 sentences typically)
-6. Encourage connection if there's genuine compatibility
-7. Use natural, friendly language
-
-PRIVACY BOUNDARIES:
-- Don't reveal personal information (location, work details, contact info)
-- Don't quote exact messages verbatim
-- Don't discuss emotional/vulnerable topics
-- Summarize themes and perspectives, not specific conversations
-- Focus on intellectual interests and communication style
-- If asked about private matters, politely redirect to connecting directly
-
-TONE: Helpful, insightful, encouraging, and respectful.
-
-Answer the user's question naturally and helpfully based on the available data.`;
+When answering, ground your response in the DATA YOU MAY USE DIRECTLY.`;
 
     const conversationHistory = chat.messages.map((m: IntelligenceChatMessage) => ({
       role: m.role,
@@ -278,11 +369,14 @@ Answer the user's question naturally and helpfully based on the available data.`
       content: question
     });
 
-    // Get AI response
-    const aiResponse = await generateAIResponse(
+    // Get AI response (use custom helper so our system prompt is authoritative)
+    const aiResponseObj = await generateCustomAIResponse(
       conversationHistory,
-      systemPrompt
+      systemPrompt,
+      { model: 'deepseek/deepseek-chat', maxTokens: 500, temperature: 0.7 }
     );
+    
+    const aiResponse = aiResponseObj.content || "I'm having trouble processing that question. Please try again.";
 
     // Save to chat history
     const updatedMessages: IntelligenceChatMessage[] = [
@@ -299,10 +393,18 @@ Answer the user's question naturally and helpfully based on the available data.`
       }
     ];
 
-    await supabase
+    console.log('[NetworkingIntelligence] Saving', updatedMessages.length, 'messages to chat', chatId);
+    const { error: updateError } = await supabase
       .from('networking_intelligence_chats')
       .update({ messages: updatedMessages })
       .eq('id', chatId);
+
+    if (updateError) {
+      console.error('[NetworkingIntelligence] Error saving messages:', updateError);
+      throw updateError;
+    }
+    
+    console.log('[NetworkingIntelligence] Messages saved successfully');
 
     return aiResponse;
   } catch (error) {

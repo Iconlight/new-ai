@@ -51,24 +51,56 @@ export default function IntelligenceChatScreen() {
         ? match.user_id_2 
         : match.user_id_1;
 
-      // Get target user profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('full_name, avatar_url')
-        .eq('id', targetUserId)
-        .single();
+      // Get target user's display info
+      // 1) Prefer secured RPC (works with RLS via SECURITY DEFINER)
+      console.log('[IntelligenceChat] Fetching display profile via RPC for user:', targetUserId);
+      let displayName: string | undefined;
+      let displayAvatar: string | undefined;
+      try {
+        const { data: rpc } = await supabase.rpc('get_matched_user_profile', { target_user_id: targetUserId });
+        const p = Array.isArray(rpc) ? rpc?.[0] : rpc;
+        if (p && (p.full_name || p.email)) {
+          displayName = (p.full_name && p.full_name.trim().length > 0)
+            ? p.full_name
+            : (p.email && p.email.includes('@'))
+              ? p.email.split('@')[0]
+              : undefined;
+          displayAvatar = p.avatar_url as string | undefined;
+          console.log('[IntelligenceChat] RPC display profile:', { name: displayName, avatar: !!displayAvatar });
+        }
+      } catch (e) {
+        console.warn('[IntelligenceChat] RPC get_matched_user_profile failed:', (e as any)?.message || e);
+      }
 
-      if (profileError) {
-        console.error('Error loading profile:', profileError);
-        return;
+      // 2) Fallback: direct profiles select (RLS may allow due to match)
+      if (!displayName) {
+        console.log('[IntelligenceChat] RPC empty, falling back to profiles select for user:', targetUserId);
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('full_name, avatar_url, email')
+          .eq('id', targetUserId)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error('[IntelligenceChat] Error loading profile:', profileError);
+        } else {
+          console.log('[IntelligenceChat] Profile data:', profile);
+          if (profile) {
+            displayName = (profile.full_name && profile.full_name.trim().length > 0)
+              ? profile.full_name
+              : (profile as any).email?.split?.('@')?.[0];
+            displayAvatar = profile.avatar_url as any;
+          }
+        }
       }
 
       const targetUserData = {
         id: targetUserId,
-        name: profile?.full_name || 'User',
-        avatar: profile?.avatar_url
+        name: displayName || 'User',
+        avatar: displayAvatar
       };
 
+      console.log('[IntelligenceChat] Target user data:', targetUserData);
       setTargetUser(targetUserData);
 
       // Get or create intelligence chat
@@ -120,7 +152,8 @@ export default function IntelligenceChatScreen() {
         chatId,
         user.id,
         targetUser.id,
-        userMessage.text
+        userMessage.text,
+        targetUser.name
       );
 
       const aiMessage: IMessage = {
@@ -168,14 +201,22 @@ export default function IntelligenceChatScreen() {
             backgroundColor: 'rgba(255,255,255,0.1)',
             borderWidth: 1,
             borderColor: 'rgba(255,255,255,0.15)',
+            marginVertical: 6,
+            maxWidth: '85%'
           },
           right: {
             backgroundColor: '#7C3AED',
+            marginVertical: 6,
+            maxWidth: '85%'
           }
         }}
         textStyle={{
           left: { color: '#ffffff' },
           right: { color: '#ffffff' }
+        }}
+        containerStyle={{
+          left: { marginLeft: 0 },
+          right: { marginRight: 0 },
         }}
       />
     );
@@ -262,6 +303,7 @@ export default function IntelligenceChatScreen() {
             _id: user?.id || '1',
             name: user?.full_name || 'You',
           }}
+          renderAvatar={() => null}
           isTyping={isTyping}
           placeholder="Ask about their interests, perspectives..."
           alwaysShowSend
@@ -269,9 +311,9 @@ export default function IntelligenceChatScreen() {
           renderInputToolbar={renderInputToolbar}
           renderSend={renderSend}
           messagesContainerStyle={styles.messagesContainer}
-          textInputStyle={styles.textInput}
-          listViewProps={{
-            style: { backgroundColor: 'transparent' }
+          textInputProps={{
+            placeholderTextColor: 'rgba(255,255,255,0.7)',
+            style: styles.textInput,
           }}
         />
       </KeyboardAvoidingView>
@@ -312,16 +354,17 @@ const styles = StyleSheet.create({
   inputToolbar: {
     backgroundColor: 'transparent',
     borderTopWidth: 0,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     paddingVertical: 4,
   },
   inputPrimary: {
     alignItems: 'center',
   },
   textInput: {
+    flex: 1,
     color: '#ffffff',
     backgroundColor: 'transparent',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingTop: 8,
     paddingBottom: 8,
     fontSize: 16,
@@ -329,13 +372,13 @@ const styles = StyleSheet.create({
   sendContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 2,
     marginBottom: 4,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',

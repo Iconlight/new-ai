@@ -460,24 +460,17 @@ export default function NetworkingChatScreen() {
           }}
           // (Removed renderBubble override; we fully control layout in renderMessage)
           textInputProps={{
-            placeholderTextColor: 'rgba(255,255,255,0.6)',
+            placeholderTextColor: 'rgba(255,255,255,0.7)',
             style: {
               flex: 1,
-              backgroundColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: 'transparent',
               color: '#ffffff',
-              borderRadius: 20,
               paddingHorizontal: 12,
-              paddingTop: 5,
-              paddingBottom: 5,
+              paddingTop: 8,
+              paddingBottom: 8,
               marginHorizontal: 0,
               borderWidth: 0,
-              borderRightWidth: 0,
-              borderColor: 'transparent',
-              shadowColor: '#000',
-              shadowOpacity: 0.25,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-            }
+            },
           }}
           minComposerHeight={36}
           maxComposerHeight={90}
@@ -501,23 +494,19 @@ export default function NetworkingChatScreen() {
           )}
           renderSend={(props) => (
             <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
-              <LinearGradient
-                colors={["#8B5CF6", "#EC4899"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+              <View
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 12,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: 'rgba(255,255,255,0.15)',
                   justifyContent: 'center',
                   alignItems: 'center',
                   marginRight: 6,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.35)'
                 }}
               >
-                <Ionicons name="send" size={18} color="#F5F3FF" />
-              </LinearGradient>
+                <Ionicons name="send" size={20} color="#FFFFFF" />
+              </View>
             </Send>
           )}
           renderMessageText={(props) => {

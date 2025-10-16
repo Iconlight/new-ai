@@ -196,7 +196,16 @@ export const findCompatibleUsers = async (userId: string): Promise<UserCompatibi
   try {
     // Get current user's pattern
     const userPattern = await getUserConversationPattern(userId);
-    if (!userPattern) return [];
+    if (!userPattern) {
+      console.log('❌ Current user has no conversation pattern');
+      return [];
+    }
+
+    console.log('✅ Current user pattern:', {
+      style: userPattern.communicationStyle,
+      interests: userPattern.interests,
+      curiosity: userPattern.curiosityLevel
+    });
 
     // Get all other users' patterns
     const { data: otherPatterns, error } = await supabase
@@ -204,16 +213,31 @@ export const findCompatibleUsers = async (userId: string): Promise<UserCompatibi
       .select('*')
       .neq('user_id', userId);
 
-    if (error || !otherPatterns) return [];
+    if (error) {
+      console.error('❌ Error fetching other patterns:', error);
+      return [];
+    }
+
+    console.log(`📊 Found ${otherPatterns?.length || 0} other users with conversation patterns`);
+
+    if (!otherPatterns || otherPatterns.length === 0) {
+      console.log('⚠️ No other users found with conversation patterns');
+      return [];
+    }
 
     const compatibilities: UserCompatibility[] = [];
 
     for (const otherPattern of otherPatterns) {
       const compatibility = calculateCompatibility(userPattern, otherPattern);
-      if (compatibility.compatibilityScore > 60) { // Only include good matches
+      console.log(`🔍 Compatibility with ${otherPattern.user_id}: ${compatibility.compatibilityScore} (threshold: 60)`);
+      
+      // Lower threshold for testing - change back to 60 for production
+      if (compatibility.compatibilityScore > 30) { // Lowered from 60 for testing
         compatibilities.push(compatibility);
       }
     }
+
+    console.log(`✅ Found ${compatibilities.length} compatible users above threshold`);
 
     // Sort by compatibility score
     return compatibilities.sort((a, b) => b.compatibilityScore - a.compatibilityScore);

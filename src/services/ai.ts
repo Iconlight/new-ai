@@ -57,64 +57,50 @@ export const generateAIResponse = async (
   }
 
   try {
-    // Extract news context from the first assistant message if not provided
-    let contextInfo = newsContext;
-    if (!contextInfo && messages.length > 0) {
-      const firstMessage = messages.find(m => m.role === 'assistant');
-      if (firstMessage?.content) {
-        // Try to extract quoted title from the message
-        const titleMatch = firstMessage.content.match(/"([^"]+)"/);
-        if (titleMatch) {
-          contextInfo = { title: titleMatch[1] };
-        }
-      }
-    }
-
-    const interestsContext = userInterests.length > 0 
-      ? `User's interests: ${userInterests.join(', ')}.` 
-      : '';
-
-    const newsContextPrompt = contextInfo 
-      ? `\n\nIMPORTANT CONTEXT: This conversation is about a specific news article/topic:
-- Title: "${contextInfo.title}"
-${contextInfo.description ? `- Description: ${contextInfo.description}` : ''}
-${contextInfo.category ? `- Category: ${contextInfo.category}` : ''}
-${contextInfo.url ? `- Source: ${contextInfo.url}` : ''}
-
-You MUST base your responses on this specific article/topic. Do NOT use general knowledge or training data about similar topics. If the user asks about details not in the article, acknowledge that and ask them what they think or redirect to what IS in the article. Stay focused on THIS specific news story.`
-      : '';
-
-    const systemPrompt = `You are ProactiveAI, a conversational AI assistant designed to engage users in meaningful discussions about current news and topics based on their interests. ${interestsContext}
-
-Your identity:
-- Your name is "ProactiveAI" (not ChatGPT, not any other AI)
-- You are a specialized news discussion assistant
-- You help users explore and discuss current events
-
-Your behavior:
-- Be conversational, engaging, and thoughtful
-- Ask follow-up questions to keep the conversation flowing
-- Keep responses concise but informative (2-4 sentences typically)
-- Show genuine interest in the user's thoughts and perspectives
-- Encourage critical thinking and diverse viewpoints${newsContextPrompt}
-
-Remember: You are ProactiveAI, and when discussing news, always stay grounded in the specific article being discussed.`;
-
     const completion = await openrouter.chat.completions.create({
       model: 'deepseek/deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages
-      ],
+      messages: [{ role: 'system', content: 'You are ProactiveAI, a conversational AI assistant designed to engage users in meaningful discussions about current news and topics based on their interests.' }, ...messages],
       max_tokens: 500,
       temperature: 0.7,
     });
 
     return {
-      content: completion.choices[0]?.message?.content || 'I apologize, but I couldn\'t generate a response.',
+      content: completion.choices[0]?.message?.content || 'I couldn\'t generate a response.',
     };
   } catch (error) {
     console.error('AI Response Error:', error);
+    return {
+      content: 'I\'m having trouble connecting right now. Please try again later.',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+};
+
+export const generateCustomAIResponse = async (
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
+  systemPrompt: string,
+  options?: { model?: string; maxTokens?: number; temperature?: number }
+): Promise<AIResponse> => {
+  if (!openrouter) {
+    return {
+      content: 'AI service is not available right now. Please try again later.',
+      error: 'OpenAI client not initialized',
+    };
+  }
+
+  try {
+    const completion = await openrouter.chat.completions.create({
+      model: options?.model || 'deepseek/deepseek-chat',
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      max_tokens: options?.maxTokens ?? 500,
+      temperature: options?.temperature ?? 0.7,
+    });
+
+    return {
+      content: completion.choices[0]?.message?.content || 'I couldn\'t generate a response.',
+    };
+  } catch (error) {
+    console.error('Custom AI Response Error:', error);
     return {
       content: 'I\'m having trouble connecting right now. Please try again later.',
       error: error instanceof Error ? error.message : 'Unknown error',
