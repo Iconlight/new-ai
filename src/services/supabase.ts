@@ -14,30 +14,45 @@ export const SUPABASE_URL = supabaseUrl;
 export const SUPABASE_ANON_KEY = supabaseAnonKey;
 
 // Custom storage implementation using Expo SecureStore for better security
+// Properly handles async operations with error handling to prevent session loss
 const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => {
-    if (Platform.OS === 'web') {
-      return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    }
-    return SecureStore.getItemAsync(key);
-  },
-  setItem: (key: string, value: string) => {
-    if (Platform.OS === 'web') {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(key, value);
+  getItem: async (key: string) => {
+    try {
+      if (Platform.OS === 'web') {
+        return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
       }
-      return;
+      const value = await SecureStore.getItemAsync(key);
+      return value;
+    } catch (error) {
+      console.error('[Storage] Error getting item:', key, error);
+      return null;
     }
-    return SecureStore.setItemAsync(key, value);
   },
-  removeItem: (key: string) => {
-    if (Platform.OS === 'web') {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(key);
+  setItem: async (key: string, value: string) => {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(key, value);
+        }
+        return;
       }
-      return;
+      await SecureStore.setItemAsync(key, value);
+    } catch (error) {
+      console.error('[Storage] Error setting item:', key, error);
     }
-    return SecureStore.deleteItemAsync(key);
+  },
+  removeItem: async (key: string) => {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(key);
+        }
+        return;
+      }
+      await SecureStore.deleteItemAsync(key);
+    } catch (error) {
+      console.error('[Storage] Error removing item:', key, error);
+    }
   },
 };
 
@@ -49,4 +64,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
     flowType: 'implicit', // Use implicit flow for React Native (PKCE has issues with WebCrypto)
   },
+});
+
+// Add error handler for token refresh failures to prevent unexpected logouts
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') {
+    console.log('[Supabase] Session token refreshed successfully');
+  } else if (event === 'SIGNED_OUT') {
+    console.log('[Supabase] User signed out');
+  } else if (event === 'SIGNED_IN') {
+    console.log('[Supabase] User signed in');
+  }
+  
+  // Log any errors that might cause unexpected logouts
+  if (!session && event !== 'SIGNED_OUT' && event !== 'INITIAL_SESSION') {
+    console.warn('[Supabase] Session lost unexpectedly. Event:', event);
+  }
 });

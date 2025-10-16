@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import React, { useEffect } from 'react';
 import { View, StyleSheet, FlatList } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FAB, Text, Card, IconButton, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useChat } from '../../src/contexts/ChatContext';
@@ -10,6 +11,7 @@ import { Chat } from '../../src/types';
 export default function ChatsScreen() {
   const theme = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const { chats, createNewChat, deleteChat, refreshChats } = useChat();
 
   // Redirect to discover page since we're using top navigation layout
@@ -60,7 +62,7 @@ export default function ChatsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
         <Text variant="headlineMedium" style={styles.title}>
           Your Conversations
         </Text>
@@ -100,7 +102,6 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
-    paddingTop: 60,
   },
   title: {
     fontWeight: 'bold',

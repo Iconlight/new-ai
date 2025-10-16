@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Text, Surface, List, Switch, useTheme } from 'react-native-paper';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -10,6 +11,7 @@ import { UserInterest, UserPreferences } from '../../src/types';
 export default function ProfileScreen() {
   const theme = useTheme();
   const { user, signOut } = useAuth();
+  const insets = useSafeAreaInsets();
   const { generateDailyConversations } = useNotification();
   const [interests, setInterests] = useState<UserInterest[]>([]);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
@@ -95,7 +97,7 @@ export default function ProfileScreen() {
       style={styles.gradientBg}
     >
       <ScrollView style={[styles.container, { backgroundColor: 'transparent' }]}> 
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
           <Text variant="headlineMedium" style={styles.title}>
             Profile
           </Text>
@@ -194,7 +196,6 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
-    paddingTop: 60,
   },
   title: {
     fontWeight: 'bold',

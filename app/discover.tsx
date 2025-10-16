@@ -3,8 +3,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, PanResponder, RefreshControl, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View, NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator } from 'react-native';
+import { Animated, PanResponder, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View, NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator } from 'react-native';
 import { Appbar, Button, IconButton, Text, useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
 import TopicSkeleton from '../components/ui/TopicSkeleton';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -18,6 +19,7 @@ export default function DiscoverScreen() {
   const theme = useTheme();
   const { user } = useAuth();
   const { chats, startChatWithAI, refreshChats, selectChat, createNewChat } = useChat();
+  const insets = useSafeAreaInsets(); // Get device safe area insets
   const [todaysTopics, setTodaysTopics] = useState<ProactiveTopic[]>([]);
   const [forYouTopics, setForYouTopics] = useState<ProactiveTopic[]>([]);
   const [loading, setLoading] = useState(false);
@@ -432,12 +434,12 @@ export default function DiscoverScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.gradientBg}
     >
-      <SafeAreaView
+      <View
         style={[styles.container, { backgroundColor: 'transparent' }]}
         {...edgePanResponder.panHandlers}
       >
         {/* Floating Header */}
-        <View style={styles.floatingHeader}>
+        <View style={[styles.floatingHeader, { paddingTop: Math.max(insets.top, 40) + 12 }]}>
           {/* Menu Button */}
           <TouchableOpacity
             activeOpacity={0.8}
@@ -478,33 +480,29 @@ export default function DiscoverScreen() {
       {/* Floating Tab Buttons */}
       <View style={styles.floatingTabContainer}>
         <TouchableOpacity
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           onPress={() => setActiveTab('foryou')}
-          style={[styles.floatingTab, activeTab === 'foryou' && styles.floatingTabActive]}
+          style={styles.floatingTab}
         >
-          {activeTab === 'foryou' ? (
-            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-          ) : (
-            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-          )}
           <Text style={[styles.floatingTabText, activeTab === 'foryou' && styles.floatingTabTextActive]}>
             For You
           </Text>
+          {activeTab === 'foryou' && (
+            <View style={styles.tabIndicator} />
+          )}
         </TouchableOpacity>
         
         <TouchableOpacity
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           onPress={() => setActiveTab('interests')}
-          style={[styles.floatingTab, activeTab === 'interests' && styles.floatingTabActive]}
+          style={styles.floatingTab}
         >
-          {activeTab === 'interests' ? (
-            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-          ) : (
-            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-          )}
           <Text style={[styles.floatingTabText, activeTab === 'interests' && styles.floatingTabTextActive]}>
             Interests
           </Text>
+          {activeTab === 'interests' && (
+            <View style={styles.tabIndicator} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -674,22 +672,22 @@ export default function DiscoverScreen() {
         </ScrollView>
       </Animated.View>
 
-        {/* Overlay for drawer close */}
-        {drawerOpen && (
-          <TouchableOpacity 
-            style={styles.overlay} 
-            onPress={() => setDrawerOpen(false)}
-            activeOpacity={1}
-          />
-        )}
+      {/* Overlay for drawer close */}
+      {drawerOpen && (
+        <TouchableOpacity 
+          style={styles.overlay} 
+          onPress={() => setDrawerOpen(false)}
+          activeOpacity={1}
+        />
+      )}
 
-        {/* Navigation loading overlay when opening chats from Discover */}
-        {navLoading && (
-          <View style={styles.navOverlay}>
-            <AnimatedLoading transparentBackground size={96} message="" />
-          </View>
-        )}
-    </SafeAreaView>
+      {/* Navigation loading overlay when opening chats from Discover */}
+      {navLoading && (
+        <View style={styles.navOverlay}>
+          <AnimatedLoading transparentBackground size={96} message="" />
+        </View>
+      )}
+      </View>
     </LinearGradient>
   );
 }
@@ -729,41 +727,39 @@ const styles = StyleSheet.create({
   },
   floatingTabContainer: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 32,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   floatingTab: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  floatingTabActive: {
-    backgroundColor: 'rgba(192,132,252,0.15)',
-    borderColor: 'rgba(192,132,252,0.4)',
-    shadowColor: '#C084FC',
-    shadowOpacity: 0.3,
-    elevation: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   floatingTabText: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 0.5,
   },
   floatingTabTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  tabIndicator: {
+    marginTop: 6,
+    width: 40,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#C084FC',
+    shadowColor: '#C084FC',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 4,
   },
   scrollView: {
     flex: 1,
@@ -964,7 +960,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: 8,
   },
   headerButton: {
     width: 44,

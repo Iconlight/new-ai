@@ -11,6 +11,7 @@ import {
   askAboutUser, 
   getIntelligenceChatMessages 
 } from '../../../src/services/networkingIntelligence';
+import { debugUserContext } from '../../../src/services/debugNetworkingIntelligence';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { supabase } from '../../../src/services/supabase';
 
@@ -192,6 +193,36 @@ export default function IntelligenceChatScreen() {
     }
   }, [chatId, user, targetUser]);
 
+  const handleDebug = async () => {
+    if (!user || !targetUser) {
+      console.log('⚠️ Cannot debug: user or targetUser not set');
+      return;
+    }
+    
+    console.log('🔍 Running debug diagnostic...');
+    await debugUserContext(user.id, targetUser.id);
+  };
+
+  const handleClearChat = async () => {
+    if (!chatId || !user || !targetUser) return;
+    
+    try {
+      // Delete the intelligence chat to start fresh
+      const { error } = await supabase
+        .from('networking_intelligence_chats')
+        .delete()
+        .eq('id', chatId);
+      
+      if (error) throw error;
+      
+      console.log('✅ Chat cleared, reloading...');
+      // Reload the chat (will create a new one)
+      await loadChat();
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+    }
+  };
+
   const renderBubble = (props: any) => {
     return (
       <Bubble
@@ -288,6 +319,17 @@ export default function IntelligenceChatScreen() {
             titleStyle={{ color: '#fff', fontSize: 18 }}
             subtitleStyle={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}
           />
+          {/* Debug tools - uncomment if needed */}
+          {/* <Appbar.Action 
+            icon="refresh" 
+            color="#fff" 
+            onPress={handleClearChat}
+          />
+          <Appbar.Action 
+            icon="bug" 
+            color="#fff" 
+            onPress={handleDebug}
+          /> */}
         </Appbar.Header>
       </View>
 

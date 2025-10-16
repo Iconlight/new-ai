@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, useTheme, Button } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -11,6 +12,7 @@ import { ProactiveTopic } from '../../src/types';
 export default function ExploreScreen() {
   const theme = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [todaysTopics, setTodaysTopics] = useState<ProactiveTopic[]>([]);
   const [forYouTopics, setForYouTopics] = useState<ProactiveTopic[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,7 +140,7 @@ export default function ExploreScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
         <Text variant="headlineMedium" style={styles.title}>
           Today's Conversations
         </Text>
@@ -232,7 +234,6 @@ export default function ExploreScreen() {
     },
     header: {
       padding: 20,
-      paddingTop: 60,
     },
     title: {
       fontWeight: 'bold',
