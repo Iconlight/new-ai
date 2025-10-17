@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Text, Switch, Card, Button, Appbar, useTheme, List } from 'react-native-paper';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
+import { Text, Switch, Card, Button, useTheme, List } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
 import { supabase } from '../src/services/supabase';
@@ -79,10 +81,19 @@ export default function SettingsScreen() {
       style={styles.gradientBg}
     >
       <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
-        <Appbar.Header style={styles.glassHeader}>
-          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
-          <Appbar.Content title="Settings" titleStyle={{ color: '#ffffff' }} />
-        </Appbar.Header>
+        {/* Floating Header */}
+        <View style={styles.floatingHeader}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.back()}
+            style={styles.headerButton}
+          >
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitleText}>Settings</Text>
+          <View style={{ width: 44 }} />
+        </View>
 
         <ScrollView style={styles.content}>
           <Card style={[styles.card, styles.glassCard]}>
@@ -193,14 +204,36 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: '#FFFFFF',
   },
-  glassHeader: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 8,
+  floatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 52,
+  },
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitleText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
 });

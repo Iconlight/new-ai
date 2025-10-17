@@ -154,6 +154,7 @@ async function insertBatchTopics(
     source_type?: 'news' | 'evergreen' | 'location' | 'serendipity';
     source_url?: string;
     source_title?: string;
+    source_description?: string;
   }>
 ): Promise<void> {
   if (!items.length) {
@@ -172,6 +173,7 @@ async function insertBatchTopics(
     source_type: it.source_type ?? null,
     source_url: it.source_url ?? null,
     source_title: it.source_title ?? null,
+    source_description: it.source_description ?? null,
   }));
   const { error } = await supabase.from('feed_topics').insert(payload);
   if (error) {
@@ -416,6 +418,7 @@ export async function refreshInterestsFeed(userId: string): Promise<void> {
     source_type: 'news' as const,
     source_url: a.url,
     source_title: a.title,
+    source_description: a.description,
   }));
 
   // Randomize the order for TikTok-style mixed feed
@@ -501,6 +504,7 @@ export async function refreshForYouFeed(userId: string): Promise<void> {
       source_type: 'news',
       source_url: article.url,
       source_title: article.title,
+      source_description: article.description,
     });
   });
 
@@ -650,6 +654,7 @@ export async function fetchNextBatch(
         created_at: new Date().toISOString(),
         source_url: article.url,
         source_title: article.title,
+        source_description: article.description,
         source_type: 'news',
         category: article.category,
       };

@@ -276,15 +276,19 @@ export default function DiscoverScreen() {
   // Scroll handler for infinite scroll
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 500; // Trigger 500px before bottom
+    const paddingToBottom = 300; // Trigger 300px before bottom
     
-    const isNearBottom = 
-      layoutMeasurement.height + contentOffset.y >= 
-      contentSize.height - paddingToBottom;
+    // Calculate if we're near the bottom
+    const scrollPosition = contentOffset.y + layoutMeasurement.height;
+    const contentHeight = contentSize.height;
+    const isNearBottom = scrollPosition >= contentHeight - paddingToBottom;
     
     const hasMore = activeTab === 'interests' ? hasMoreInterests : hasMoreForYou;
+    const currentTopics = activeTab === 'interests' ? todaysTopics : forYouTopics;
     
-    if (isNearBottom && !loadingMore && !loading && hasMore) {
+    // Only load if: near bottom, not already loading, has content, and has more to load
+    if (isNearBottom && !loadingMore && !loading && hasMore && currentTopics.length > 0) {
+      console.log('📜 Scroll detected near bottom, loading more...');
       loadMoreTopics();
     }
   };
@@ -391,6 +395,7 @@ export default function DiscoverScreen() {
       // Extract news context from topic
       const newsContext = topic.source_title ? {
         title: topic.source_title,
+        description: topic.source_description,
         url: topic.source_url,
         category: topic.category,
       } : undefined;
@@ -513,7 +518,7 @@ export default function DiscoverScreen() {
         showsVerticalScrollIndicator={false}
         alwaysBounceVertical={true}
         onScroll={handleScroll}
-        scrollEventThrottle={400}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

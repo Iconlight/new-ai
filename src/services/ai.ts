@@ -47,7 +47,7 @@ export interface AIResponse {
 export const generateAIResponse = async (
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   userInterests: string[] = [],
-  newsContext?: { title: string; description?: string; url?: string; category?: string }
+  newsContext?: { title: string; description?: string; url?: string; category?: string; content?: string }
 ): Promise<AIResponse> => {
   if (!openrouter) {
     return {
@@ -57,9 +57,50 @@ export const generateAIResponse = async (
   }
 
   try {
+    // Build system prompt with article context if available
+    let systemPrompt = 'You are ProactiveAI, a conversational AI assistant designed to engage users in meaningful discussions about current news and topics based on their interests.';
+    
+    if (newsContext) {
+      systemPrompt += '\n\n';
+      if (newsContext.content) {
+        // Full article content is available - use it!
+        systemPrompt += `IMPORTANT: You are discussing this specific article. Base your responses STRICTLY on the article content below. Do NOT use your general knowledge or make assumptions beyond what's in the article.\n\n`;
+        systemPrompt += `Article Title: ${newsContext.title}\n`;
+        if (newsContext.category) {
+          systemPrompt += `Category: ${newsContext.category}\n`;
+        }
+        systemPrompt += `\nFull Article Content:\n${newsContext.content}\n\n`;
+        systemPrompt += `Remember: Only discuss what's explicitly mentioned in the article above. If asked about something not in the article, clearly state that the article doesn't cover that topic.`;
+      } else if (newsContext.description) {
+        // Have title and description (RSS feed summary) - use it as article summary
+        systemPrompt += `IMPORTANT: You are discussing this specific article. You have the article's summary/excerpt from the RSS feed (not the full article text).\n\n`;
+        systemPrompt += `Article Title: ${newsContext.title}\n`;
+        if (newsContext.category) {
+          systemPrompt += `Category: ${newsContext.category}\n`;
+        }
+        systemPrompt += `\nArticle Summary (from RSS feed):\n${newsContext.description}\n\n`;
+        systemPrompt += `INSTRUCTIONS:\n`;
+        systemPrompt += `- Discuss what's mentioned in this summary\n`;
+        systemPrompt += `- If asked for the "full article", explain you have the summary/key points from the RSS feed, not the complete article text\n`;
+        systemPrompt += `- Offer to discuss what IS available in the summary\n`;
+        systemPrompt += `- You can make reasonable inferences based on the summary, but be clear about what's stated vs inferred\n`;
+        systemPrompt += `- If the user wants more details, suggest they can read the full article at the source`;
+        if (newsContext.url) {
+          systemPrompt += `\n\nFull article available at: ${newsContext.url}`;
+        }
+      } else {
+        // Only have title - inform AI about limitation
+        systemPrompt += `Context: We're discussing an article titled "${newsContext.title}"`;
+        if (newsContext.url) {
+          systemPrompt += `\nSource: ${newsContext.url}`;
+        }
+        systemPrompt += `\n\nNote: Only the title is available. Base your discussion on the title and acknowledge when you don't have specific details from the article.`;
+      }
+    }
+
     const completion = await openrouter.chat.completions.create({
       model: 'deepseek/deepseek-chat',
-      messages: [{ role: 'system', content: 'You are ProactiveAI, a conversational AI assistant designed to engage users in meaningful discussions about current news and topics based on their interests.' }, ...messages],
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
       max_tokens: 500,
       temperature: 0.7,
     });

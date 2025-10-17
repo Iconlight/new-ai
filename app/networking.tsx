@@ -1,11 +1,12 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Appbar, Avatar, Badge, Button, Card, Chip, FAB, IconButton, Text, useTheme } from 'react-native-paper';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
-import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Appbar, Avatar, Badge, Button, Card, Chip, FAB, SegmentedButtons, Text, useTheme } from 'react-native-paper';
 import { ErrorBoundary, NetworkingErrorFallback } from '../src/components/ErrorBoundary';
 import { useAuth } from '../src/contexts/AuthContext';
 import {
@@ -552,25 +553,30 @@ function NetworkingScreenContent() {
         style={styles.gradientBg}
       >
         <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
-          <Appbar.Header style={styles.glassHeader}>
-            <BlurView intensity={40} tint="dark" style={styles.headerBlur} pointerEvents="none" />
-            <Appbar.BackAction 
-              color="#ffffff" 
-              onPress={() => router.back()} 
-              size={28}
-              style={[
-                styles.headerIcon, 
-                { 
-                  backgroundColor: 'rgba(255,255,255,0.06)', 
-                  borderRadius: 12,
-                  borderWidth: 0,
-                  borderColor: 'rgba(255,255,255,0.12)',
-                  marginLeft: 6,
-                }
-              ]}
+          {/* Floating Header */}
+          <View style={styles.floatingHeader}>
+            {/* Back Button */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => router.back()}
+              style={styles.headerButton}
+            >
+              <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            {/* Title - Floating Text */}
+            <Text style={styles.headerTitleText}>AI Networking</Text>
+
+            {/* Settings Button - Icon Only */}
+            <IconButton
+              icon="cog"
+              iconColor="#ffffff"
+              size={24}
+              onPress={() => router.push('/networking/settings')}
+              style={styles.iconButton}
             />
-            <Appbar.Content title="AI Networking" titleStyle={{ color: '#ffffff' }} />
-          </Appbar.Header>
+          </View>
 
           <View style={styles.enableContainer}>
             <Card style={[styles.enableCard, styles.glassCard]}>
@@ -621,46 +627,58 @@ function NetworkingScreenContent() {
       style={styles.gradientBg}
     >
       <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
-        <Appbar.Header style={styles.glassHeader}>
-          <BlurView intensity={40} tint="dark" style={styles.headerBlur} pointerEvents="none" />
-          <Appbar.BackAction 
-            color="#ffffff" 
-            onPress={() => router.back()} 
-            size={28}
-            style={[
-              styles.headerIcon, 
-              { 
-                backgroundColor: 'rgba(255,255,255,0.06)', 
-                borderRadius: 12,
-                borderWidth: 0,
-                borderColor: 'rgba(255,255,255,0.12)',
-                marginLeft: 6,
-              }
-            ]}
-          />
-          <Appbar.Content title="AI Networking" titleStyle={{ color: '#ffffff' }} />
-          <Appbar.Action color="#ffffff" icon="cog" onPress={() => router.push('/networking/settings')} />
-        </Appbar.Header>
+        {/* Floating Header */}
+        <View style={styles.floatingHeader}>
+          {/* Back Button */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.back()}
+            style={styles.headerButton}
+          >
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
 
-        {/* Tab Navigation */}
-        <View style={styles.tabContainer}>
-          <SegmentedButtons
-            value={activeTab}
-            onValueChange={setActiveTab}
-            buttons={[
-              {
-                value: 'discover',
-                label: 'Discover',
-                icon: 'account-search',
-              },
-              {
-                value: 'connected',
-                label: 'Connected',
-                icon: 'account-group',
-              },
-            ]}
-            style={styles.segmentedButtons}
+          {/* Title - Floating Text */}
+          <Text style={styles.headerTitleText}>AI Networking</Text>
+
+          {/* Settings Button - Icon Only */}
+          <IconButton
+            icon="cog"
+            iconColor="#ffffff"
+            size={24}
+            onPress={() => router.push('/networking/settings')}
+            style={styles.iconButton}
           />
+        </View>
+
+        {/* Floating Tab Buttons */}
+        <View style={styles.floatingTabContainer}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setActiveTab('discover')}
+            style={styles.floatingTab}
+          >
+            <Text style={[styles.floatingTabText, activeTab === 'discover' && styles.floatingTabTextActive]}>
+              Discover
+            </Text>
+            {activeTab === 'discover' && (
+              <View style={styles.tabIndicator} />
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setActiveTab('connected')}
+            style={styles.floatingTab}
+          >
+            <Text style={[styles.floatingTabText, activeTab === 'connected' && styles.floatingTabTextActive]}>
+              Connected
+            </Text>
+            {activeTab === 'connected' && (
+              <View style={styles.tabIndicator} />
+            )}
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -766,13 +784,41 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
-  tabContainer: {
+  floatingTabContainer: {
+    flexDirection: 'row',
+    gap: 32,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  segmentedButtons: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12,
+  floatingTab: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  floatingTabText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 0.5,
+  },
+  floatingTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  tabIndicator: {
+    marginTop: 6,
+    width: 40,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#C084FC',
+    shadowColor: '#C084FC',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 4,
   },
   avatarContainer: {
     position: 'relative',
@@ -905,22 +951,43 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  glassHeader: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 8,
-    overflow: 'hidden',
-    position: 'relative',
+  floatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 52,
   },
-  headerBlur: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitleText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   headerIcon: {
-    zIndex: 2,
+    fontSize: 20,
+    color: '#FFFFFF',
+  },
+  iconButton: {
+    margin: 0,
   },
 });
