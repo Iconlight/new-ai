@@ -458,28 +458,32 @@ export default function DiscoverScreen() {
           {/* Title - Floating Text */}
           <Text style={styles.headerTitleText}>ProactiveAI</Text>
 
-          {/* Networking Button - Icon Only */}
-          <View style={{ position: 'relative' }}>
-            <IconButton
-              icon="account-group"
-              iconColor="#ffffff"
-              size={24}
-              onPress={() => router.push('/networking')}
-              style={styles.iconButton}
-            />
-            {unreadNetworkingCount > 0 && (
-              <View style={styles.notificationBadge} />
-            )}
+          {/* Right Button Group: Networking + Profile */}
+          <View style={styles.headerButtonGroup}>
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={styles.headerGroupIconWrap}>
+              <IconButton
+                icon="account-group"
+                iconColor="#ffffff"
+                size={22}
+                onPress={() => router.push('/networking')}
+                style={styles.iconButton}
+              />
+              {unreadNetworkingCount > 0 && (
+                <View style={styles.headerGroupBadge} />
+              )}
+            </View>
+            <View style={styles.headerGroupDivider} />
+            <View style={styles.headerGroupIconWrap}>
+              <IconButton
+                icon="account"
+                iconColor="#ffffff"
+                size={22}
+                onPress={() => router.push('/profile')}
+                style={styles.iconButton}
+              />
+            </View>
           </View>
-
-          {/* Profile Button - Icon Only */}
-          <IconButton
-            icon="account"
-            iconColor="#ffffff"
-            size={24}
-            onPress={() => router.push('/profile')}
-            style={styles.iconButton}
-          />
         </View>
 
       {/* Floating Tab Buttons */}
@@ -993,6 +997,44 @@ const styles = StyleSheet.create({
   headerIcon: {
     fontSize: 20,
     color: '#FFFFFF',
+  },
+  headerButtonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerGroupIconWrap: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerGroupDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255,255,255,0.18)'
+  },
+  headerGroupBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: '#160427',
   },
   iconButton: {
     margin: 0,

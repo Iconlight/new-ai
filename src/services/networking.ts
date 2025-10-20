@@ -260,14 +260,10 @@ export const findNewMatches = async (userId: string): Promise<NetworkingMatch[]>
     const blockedUsers = new Set(preferences.blocked_users || []);
 
     console.log(`🔒 Existing matches: ${existingMatchIds.size}, Blocked: ${blockedUsers.size}`);
-    console.log(`⚙️ Minimum compatibility score from preferences: ${preferences.minimum_compatibility_score}`);
-
-    // Lower threshold for testing - change back to original for production
-    const effectiveMinScore = Math.min(preferences.minimum_compatibility_score, 40);
-    console.log(`📊 Using effective minimum score: ${effectiveMinScore} (lowered for testing)`);
+    console.log(`⚙️ Minimum compatibility score from preferences: ${preferences.minimum_compatibility_score}%`);
 
     const newCompatibilities = compatibilities.filter(comp => {
-      const passesScore = comp.compatibilityScore >= effectiveMinScore;
+      const passesScore = comp.compatibilityScore >= preferences.minimum_compatibility_score;
       const notExisting = !existingMatchIds.has(comp.userId2);
       const notBlocked = !blockedUsers.has(comp.userId2);
       

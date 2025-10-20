@@ -166,11 +166,13 @@ export default function NetworkingSettingsScreen() {
               <SegmentedButtons
                 value={maxMatchesPerDay.toString()}
                 onValueChange={(value) => setMaxMatchesPerDay(parseInt(value))}
+                density="small"
+                style={styles.segmented}
                 buttons={[
-                  { value: '1', label: '1' },
-                  { value: '3', label: '3' },
-                  { value: '5', label: '5' },
-                  { value: '10', label: '10' },
+                  { value: '1', label: '1', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '3', label: '3', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '5', label: '5', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '10', label: '10', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
                 ]}
               />
             </View>
@@ -188,11 +190,14 @@ export default function NetworkingSettingsScreen() {
               <SegmentedButtons
                 value={minimumCompatibility.toString()}
                 onValueChange={(value) => setMinimumCompatibility(parseInt(value))}
+                density="small"
+                style={styles.segmented}
                 buttons={[
-                  { value: '50', label: '50%' },
-                  { value: '60', label: '60%' },
-                  { value: '70', label: '70%' },
-                  { value: '80', label: '80%' },
+                  { value: '40', label: '40%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '50', label: '50%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '60', label: '60%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '70', label: '70%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '80', label: '80%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
                 ]}
               />
             </View>
@@ -288,6 +293,21 @@ const styles = StyleSheet.create({
   },
   segmentedContainer: {
     marginBottom: 16,
+    width: '100%',
+    paddingHorizontal: 4,
+  },
+  segmented: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  segmentedItem: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 4,
+    height: 36,
+  },
+  segmentedLabel: {
+    fontSize: 11,
   },
   floatingHeader: {
     flexDirection: 'row',

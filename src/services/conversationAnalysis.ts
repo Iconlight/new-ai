@@ -229,15 +229,13 @@ export const findCompatibleUsers = async (userId: string): Promise<UserCompatibi
 
     for (const otherPattern of otherPatterns) {
       const compatibility = calculateCompatibility(userPattern, otherPattern);
-      console.log(`🔍 Compatibility with ${otherPattern.user_id}: ${compatibility.compatibilityScore} (threshold: 60)`);
+      console.log(`🔍 Compatibility with ${otherPattern.user_id}: ${compatibility.compatibilityScore}%`);
       
-      // Lower threshold for testing - change back to 60 for production
-      if (compatibility.compatibilityScore > 30) { // Lowered from 60 for testing
-        compatibilities.push(compatibility);
-      }
+      // Return all compatibilities - let the caller filter based on user preferences
+      compatibilities.push(compatibility);
     }
 
-    console.log(`✅ Found ${compatibilities.length} compatible users above threshold`);
+    console.log(`✅ Found ${compatibilities.length} potential compatible users`);
 
     // Sort by compatibility score
     return compatibilities.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
