@@ -351,19 +351,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (result.type === 'success') {
         console.log('Processing OAuth response...');
         
-        // With implicit flow, tokens are in the URL hash or query params
         const url = new URL(result.url);
+        
+        // With PKCE flow, look for authorization code
+        const code = url.searchParams.get('code');
+        
+        // With implicit flow (fallback), look for tokens directly
         const accessToken = url.searchParams.get('access_token') || 
                            url.hash.match(/access_token=([^&]+)/)?.[1];
         const refreshToken = url.searchParams.get('refresh_token') || 
                             url.hash.match(/refresh_token=([^&]+)/)?.[1];
         
-        if (accessToken) {
-          console.log('Setting session with access token...');
+        if (code) {
+          // PKCE flow: exchange code for session
+          console.log('PKCE flow: Got authorization code, exchanging for session...');
+          
+          const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (sessionError) {
+            console.error('Error exchanging code for session:', sessionError);
+            return { error: sessionError.message };
+          }
+
+          if (sessionData?.session) {
+            console.log('✅ Google session created successfully (PKCE):', sessionData.session.user?.id);
+            console.log('Session expires at:', new Date(sessionData.session.expires_at! * 1000).toISOString());
+            return {};
+          }
+        } else if (accessToken && refreshToken) {
+          // Implicit flow: set session directly with tokens
+          console.log('Implicit flow: Setting session with tokens...');
           
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
-            refresh_token: refreshToken || '',
+            refresh_token: refreshToken,
           });
           
           if (sessionError) {
@@ -372,12 +393,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           if (sessionData?.session) {
-            console.log('Google session created successfully:', sessionData.session.user?.id);
+            console.log('✅ Google session created successfully (Implicit):', sessionData.session.user?.id);
+            console.log('Session expires at:', new Date(sessionData.session.expires_at! * 1000).toISOString());
+            return {};
+          }
+        } else if (accessToken && !refreshToken) {
+          console.warn('⚠️ Access token found but no refresh token - session may not persist');
+          console.log('Attempting to set session with access token only...');
+          
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: '',
+          });
+          
+          if (sessionError) {
+            console.error('Error setting session:', sessionError);
+            return { error: sessionError.message };
+          }
+
+          if (sessionData?.session) {
+            console.log('✅ Google session created (no refresh token):', sessionData.session.user?.id);
             return {};
           }
         } else {
-          console.error('No access token in OAuth response');
-          return { error: 'Failed to get access token from Google' };
+          console.error('❌ No authorization code or access token in OAuth response');
+          console.log('URL params:', Array.from(url.searchParams.entries()));
+          console.log('URL hash:', url.hash);
+          return { error: 'Failed to get authentication credentials from Google' };
         }
       }
       

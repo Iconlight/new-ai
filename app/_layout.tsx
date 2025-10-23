@@ -32,12 +32,14 @@ export default function RootLayout() {
               <NotificationProvider>
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="index" />
+                  <Stack.Screen name="welcome" />
                   <Stack.Screen name="(auth)" />
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen name="discover" />
                   <Stack.Screen name="chat/[id]" />
                   <Stack.Screen name="profile" />
                   <Stack.Screen name="onboarding" />
+                  <Stack.Screen name="saved-topics" />
                   <Stack.Screen name="auth-callback" />
                 </Stack>
                 <StatusBar style={isDark ? 'light' : 'dark'} />

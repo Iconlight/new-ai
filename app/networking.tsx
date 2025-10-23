@@ -14,6 +14,7 @@ import {
   acceptMatch,
   declineMatch,
   enableNetworking,
+  ensureConversationExists,
   findNewMatches,
   getConversationIdByMatchId,
   getUserMatches,
@@ -407,13 +408,14 @@ function NetworkingScreenContent() {
           <Button 
             mode="contained" 
             onPress={async () => {
-              const convoId = match.conversationId || await getConversationIdByMatchId(match.id);
+              if (!user?.id) return;
+              const convoId = match.conversationId || await ensureConversationExists(match.id, user.id);
               if (convoId) {
                 // Optimistically clear unread for instant UI feedback
                 setUnreadCounts(prev => ({ ...prev, [convoId]: 0 }));
                 router.push({ pathname: '/networking/chat/[id]', params: { id: convoId, name: match.otherUser?.name || '' } });
               } else {
-                Alert.alert('Conversation not ready', 'Please try again in a moment.');
+                Alert.alert('Conversation not ready', 'This match has not been fully accepted yet. Please try again in a moment.');
               }
             }}
             style={styles.chatButton}
@@ -510,13 +512,14 @@ function NetworkingScreenContent() {
           <Button 
             mode="contained" 
             onPress={async () => {
-              const convoId = match.conversationId || await getConversationIdByMatchId(match.id);
+              if (!user?.id) return;
+              const convoId = match.conversationId || await ensureConversationExists(match.id, user.id);
               if (convoId) {
                 // Optimistically clear unread for instant UI feedback
                 setUnreadCounts(prev => ({ ...prev, [convoId]: 0 }));
                 router.push({ pathname: '/networking/chat/[id]', params: { id: convoId, name: match.otherUser?.name || '' } });
               } else {
-                Alert.alert('Conversation not ready', 'Please try again in a moment.');
+                Alert.alert('Conversation not ready', 'This match has not been fully accepted yet. Please try again in a moment.');
               }
             }}
             style={styles.chatButton}

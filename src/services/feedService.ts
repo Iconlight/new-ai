@@ -187,6 +187,9 @@ async function insertBatchTopics(
 export async function refreshInterestsFeed(userId: string): Promise<void> {
   console.log('🔄 refreshInterestsFeed starting for user:', userId);
   
+  // Reset source shuffle for fresh randomization
+  resetSourceShuffle();
+  
   // Test if tables exist first
   await testFeedTables();
   
@@ -433,6 +436,9 @@ export async function refreshInterestsFeed(userId: string): Promise<void> {
 export async function refreshForYouFeed(userId: string): Promise<void> {
   console.log('🔄 refreshForYouFeed starting for user:', userId);
   
+  // Reset source shuffle for fresh randomization
+  resetSourceShuffle();
+  
   // Test if tables exist first
   await testFeedTables();
   
@@ -668,20 +674,41 @@ export async function fetchNextBatch(
   }
 }
 
-// Source rotation logic for pagination
+// Shuffled sources cache to maintain consistency across pagination
+let shuffledSourcesCache: Array<{url: string, category: string}> | null = null;
+let shuffleCacheTimestamp = 0;
+const SHUFFLE_CACHE_TTL = 3600000; // 1 hour
+
+// Reset shuffle cache (called on pull-to-refresh)
+export function resetSourceShuffle(): void {
+  console.log('🔄 Resetting source shuffle cache');
+  shuffledSourcesCache = null;
+  shuffleCacheTimestamp = 0;
+}
+
+// Source rotation logic for pagination with randomization
 function getSourcesForPage(
   allSources: Array<{url: string, category: string}>,
   page: number,
   count: number
 ): Array<{url: string, category: string}> {
-  const startIndex = (page * count) % allSources.length;
-  
-  // Circular rotation through sources
-  const selected = [];
-  for (let i = 0; i < count; i++) {
-    const index = (startIndex + i) % allSources.length;
-    selected.push(allSources[index]);
+  // Refresh shuffle cache if expired or doesn't exist
+  const now = Date.now();
+  if (!shuffledSourcesCache || (now - shuffleCacheTimestamp) > SHUFFLE_CACHE_TTL) {
+    console.log('🔀 Shuffling sources for random category distribution');
+    shuffledSourcesCache = [...allSources].sort(() => Math.random() - 0.5);
+    shuffleCacheTimestamp = now;
   }
   
+  const startIndex = (page * count) % shuffledSourcesCache.length;
+  
+  // Circular rotation through shuffled sources
+  const selected = [];
+  for (let i = 0; i < count; i++) {
+    const index = (startIndex + i) % shuffledSourcesCache.length;
+    selected.push(shuffledSourcesCache[index]);
+  }
+  
+  console.log(`📋 Page ${page} sources:`, selected.map(s => s.category).join(', '));
   return selected;
 }

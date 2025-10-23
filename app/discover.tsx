@@ -8,9 +8,13 @@ import { Appbar, Button, IconButton, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
 import TopicSkeleton from '../components/ui/TopicSkeleton';
+import TopicCard from '../components/TopicCard';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useChat } from '../src/contexts/ChatContext';
 import { getActiveFeedTopics, refreshForYouFeed, refreshInterestsFeed, fetchNextBatch } from '../src/services/feedService';
+import { reactToTopic, unreactToTopic, saveTopic, unsaveTopic, hideTopic, hideCategory as hideCategoryFunc, getUserTopicReaction, isTopicSaved } from '../src/services/topicEngagement';
+import { analytics } from '../src/services/analytics';
+import * as Sharing from 'expo-sharing';
 import { clearProactiveCache, markProactiveTopicAsSent } from '../src/services/proactiveAI';
 import { supabase } from '../src/services/supabase';
 import { ProactiveTopic } from '../src/types';
@@ -39,6 +43,8 @@ export default function DiscoverScreen() {
   const [interestsPage, setInterestsPage] = useState(0);
   const [shownForYouIds, setShownForYouIds] = useState<Set<string>>(new Set());
   const [shownInterestsIds, setShownInterestsIds] = useState<Set<string>>(new Set());
+  const [likedTopics, setLikedTopics] = useState<Set<string>>(new Set());
+  const [savedTopics, setSavedTopics] = useState<Set<string>>(new Set());
 
   // Helper: only UUIDs correspond to DB-backed proactive_topics
   const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
@@ -196,10 +202,41 @@ export default function DiscoverScreen() {
   ).current;
 
   const loadInitialData = async () => {
+    // Load user's liked and saved topics first
+    await loadUserEngagement();
+    
     if (activeTab === 'interests') {
       await loadTodaysTopics();
     } else {
       await loadForYouTopics();
+    }
+  };
+
+  const loadUserEngagement = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Load liked topics
+      const { data: reactions } = await supabase
+        .from('topic_reactions')
+        .select('topic_id')
+        .eq('user_id', user.id);
+      
+      if (reactions) {
+        setLikedTopics(new Set(reactions.map(r => r.topic_id)));
+      }
+
+      // Load saved topics
+      const { data: saved } = await supabase
+        .from('saved_topics')
+        .select('topic_id')
+        .eq('user_id', user.id);
+      
+      if (saved) {
+        setSavedTopics(new Set(saved.map(s => s.topic_id)));
+      }
+    } catch (error) {
+      console.error('Error loading user engagement:', error);
     }
   };
 
@@ -430,6 +467,101 @@ export default function DiscoverScreen() {
     setTimeout(() => setNavLoading(false), 400);
   };
 
+  // Topic action handlers
+  const handleLikeTopic = async (topic: ProactiveTopic) => {
+    if (!user?.id) return;
+    
+    const isCurrentlyLiked = likedTopics.has(topic.id);
+    
+    // Optimistic update
+    setLikedTopics(prev => {
+      const next = new Set(prev);
+      if (isCurrentlyLiked) {
+        next.delete(topic.id);
+      } else {
+        next.add(topic.id);
+      }
+      return next;
+    });
+
+    // Sync with backend
+    if (isCurrentlyLiked) {
+      await unreactToTopic(user.id, topic.id);
+    } else {
+      await reactToTopic(user.id, topic.id, 'like', topic.category);
+    }
+  };
+
+  const handleSaveTopic = async (topic: ProactiveTopic) => {
+    if (!user?.id) return;
+    
+    const isCurrentlySaved = savedTopics.has(topic.id);
+    
+    // Optimistic update
+    setSavedTopics(prev => {
+      const next = new Set(prev);
+      if (isCurrentlySaved) {
+        next.delete(topic.id);
+      } else {
+        next.add(topic.id);
+      }
+      return next;
+    });
+
+    // Sync with backend
+    if (isCurrentlySaved) {
+      await unsaveTopic(user.id, topic.id);
+    } else {
+      await saveTopic(
+        user.id, 
+        topic.id, 
+        topic.topic, 
+        topic.message, 
+        topic.source_description || '', // Article content from RSS
+        topic.category, 
+        topic.source_url
+      );
+    }
+  };
+
+  const handleShareTopic = async (topic: ProactiveTopic) => {
+    if (!user?.id) return;
+    
+    try {
+      const message = `Check out this interesting topic: ${topic.topic}\n\n${formatTopicMessage(topic.message)}\n\nDiscuss on ProactiveAI`;
+      
+      await Sharing.shareAsync('data:text/plain;base64,' + btoa(message), {
+        dialogTitle: 'Share Topic',
+      });
+      
+      analytics.trackTopicShared(user.id, topic.id);
+    } catch (error) {
+      console.error('Error sharing topic:', error);
+    }
+  };
+
+  const handleHideTopic = async (topic: ProactiveTopic, shouldHideCategory?: boolean) => {
+    if (!user?.id) return;
+    
+    if (shouldHideCategory && topic.category) {
+      await hideCategoryFunc(user.id, topic.category);
+      // Remove all topics from this category
+      if (activeTab === 'interests') {
+        setTodaysTopics(prev => prev.filter(t => t.category !== topic.category));
+      } else {
+        setForYouTopics(prev => prev.filter(t => t.category !== topic.category));
+      }
+    } else {
+      await hideTopic(user.id, topic.id, topic.category);
+      // Remove just this topic
+      if (activeTab === 'interests') {
+        setTodaysTopics(prev => prev.filter(t => t.id !== topic.id));
+      } else {
+        setForYouTopics(prev => prev.filter(t => t.id !== topic.id));
+      }
+    }
+  };
+
   const currentTopics = activeTab === 'interests' ? todaysTopics : forYouTopics;
 
   return (
@@ -458,9 +590,19 @@ export default function DiscoverScreen() {
           {/* Title - Floating Text */}
           <Text style={styles.headerTitleText}>ProactiveAI</Text>
 
-          {/* Right Button Group: Networking + Profile */}
+          {/* Right Button Group: Saved + Networking + Profile */}
           <View style={styles.headerButtonGroup}>
             <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={styles.headerGroupIconWrap}>
+              <IconButton
+                icon="bookmark-multiple"
+                iconColor="#ffffff"
+                size={22}
+                onPress={() => router.push('/saved-topics')}
+                style={styles.iconButton}
+              />
+            </View>
+            <View style={styles.headerGroupDivider} />
             <View style={styles.headerGroupIconWrap}>
               <IconButton
                 icon="account-group"
@@ -547,31 +689,18 @@ export default function DiscoverScreen() {
           ) : currentTopics.length > 0 ? (
             currentTopics.map((topic, idx) => {
               return (
-                <TouchableOpacity
+                <TopicCard
                   key={topic.id}
-                  activeOpacity={0.8}
+                  topic={topic}
                   onPress={() => handleStartTopic(topic)}
+                  onLike={() => handleLikeTopic(topic)}
+                  onSave={() => handleSaveTopic(topic)}
+                  onShare={() => handleShareTopic(topic)}
+                  isLiked={likedTopics.has(topic.id)}
+                  isSaved={savedTopics.has(topic.id)}
                   disabled={startingTopicId === topic.id}
-                  style={styles.topicCard}
-                >
-                  <Text variant="titleSmall" style={styles.cardTitle}>
-                    {topic.topic}
-                  </Text>
-                  <Text variant="bodyMedium" style={styles.cardMessage}>
-                    {formatTopicMessage(topic.message)}
-                  </Text>
-                  <View style={styles.cardMeta}>
-                    <Text variant="bodySmall" style={styles.metaText}>
-                      {new Date(topic.scheduled_for).toLocaleTimeString()}
-                    </Text>
-                    {topic.interests.length > 0 && (
-                      <Text variant="bodySmall" style={styles.metaText}>
-                        {topic.interests.slice(0, 2).join(', ')}
-                        {topic.interests.length > 2 && ` +${topic.interests.length - 2}`}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                  formatMessage={formatTopicMessage}
+                />
               );
             })
           ) : (
@@ -1027,14 +1156,22 @@ const styles = StyleSheet.create({
   },
   headerGroupBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#EF4444',
     borderWidth: 2,
     borderColor: '#160427',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   iconButton: {
     margin: 0,

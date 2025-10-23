@@ -471,6 +471,88 @@ export const getConversationIdByMatchId = async (matchId: string): Promise<strin
 };
 
 /**
+ * Ensures a conversation exists for an accepted match, creating it if necessary
+ * This fixes the issue where accepted matches don't have conversations
+ */
+export const ensureConversationExists = async (matchId: string, userId: string): Promise<string | null> => {
+  try {
+    console.log(`🔍 Ensuring conversation exists for match ${matchId}`);
+    
+    // First check if conversation already exists
+    const existingConvoId = await getConversationIdByMatchId(matchId);
+    if (existingConvoId) {
+      console.log(`✅ Conversation already exists: ${existingConvoId}`);
+      return existingConvoId;
+    }
+    
+    // If not, fetch the match details
+    const { data: match, error: matchError } = await supabase
+      .from('user_matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+    
+    if (matchError || !match) {
+      console.error('❌ Match not found:', matchError);
+      return null;
+    }
+    
+    // Only create conversation if match is accepted
+    if (match.status !== 'accepted') {
+      console.log(`⚠️ Match not accepted yet, status: ${match.status}`);
+      return null;
+    }
+    
+    console.log(`📝 Creating missing conversation for accepted match ${matchId}`);
+    
+    // Generate conversation starter
+    const conversationStarter = await generateNetworkingConversationStarter(
+      match.user_id_1,
+      match.user_id_2
+    );
+    
+    // Create conversation
+    const { data: conversation, error: convError } = await supabase
+      .from('networking_conversations')
+      .insert({
+        match_id: matchId,
+        user_id_1: match.user_id_1,
+        user_id_2: match.user_id_2,
+        conversation_starter: conversationStarter
+      })
+      .select()
+      .single();
+    
+    if (convError || !conversation) {
+      console.error('❌ Error creating conversation:', convError);
+      return null;
+    }
+    
+    // Add starter message
+    await supabase
+      .from('networking_messages')
+      .insert({
+        conversation_id: conversation.id,
+        sender_id: userId,
+        content: conversationStarter,
+        message_type: 'starter'
+      });
+    
+    // Update last message timestamp
+    await supabase
+      .from('networking_conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', conversation.id);
+    
+    console.log(`✅ Conversation created successfully: ${conversation.id}`);
+    return conversation.id;
+  } catch (error) {
+    console.error('❌ Error ensuring conversation exists:', error);
+    return null;
+  }
+};
+
+/**
  * Get conversation info including the other user's name for the given viewer
  */
 export const getNetworkingConversationInfo = async (
