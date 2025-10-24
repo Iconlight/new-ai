@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Share } from 'react-native';
 import { Text, Appbar } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
@@ -7,6 +7,7 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { useChat } from '../src/contexts/ChatContext';
 import { getSavedTopics, unsaveTopic, markSavedTopicOpened, SavedTopic } from '../src/services/topicEngagement';
 import { analytics } from '../src/services/analytics';
+import { createShareLink } from '../src/services/shareLinks';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
 import TopicCard from '../components/TopicCard';
 import { ProactiveTopic } from '../src/types';
@@ -224,7 +225,33 @@ export default function SavedTopicsScreen() {
                   onPress={() => handleTopicPress(topic)}
                   onLike={() => {}}
                   onSave={() => handleUnsave(topic)}
-                  onShare={() => {}}
+                  onShare={async () => {
+                    try {
+                      const payload = {
+                        itemType: 'topic' as const,
+                        itemId: topic.topicId,
+                        userId: user?.id,
+                        title: topic.topicTitle || 'Saved Topic',
+                        description: topic.topicMessage || topic.articleContent || undefined,
+                        imageUrl: undefined,
+                        sourceUrl: topic.sourceUrl || undefined,
+                        category: topic.topicCategory || undefined,
+                        newsContext: {
+                          title: topic.topicTitle || 'Saved Topic',
+                          description: topic.topicMessage || undefined,
+                          url: topic.sourceUrl || undefined,
+                          category: topic.topicCategory || undefined,
+                          content: topic.articleContent || undefined,
+                        },
+                      };
+                      const link = await createShareLink(payload);
+                      const shareMessage = `Discuss on ProactiveAI: ${payload.title}\n\n${payload.description || ''}\n\nLink: ${link?.url || (payload.sourceUrl || '')}`.trim();
+                      await Share.share({ message: shareMessage, url: link?.url || payload.sourceUrl });
+                      if (user?.id) analytics.trackTopicShared(user.id, topic.topicId);
+                    } catch (e) {
+                      console.error('Error sharing saved topic:', e);
+                    }
+                  }}
                   isLiked={false}
                   isSaved={true}
                   disabled={openingTopicId === topic.id}

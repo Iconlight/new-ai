@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, PanResponder, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View, NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator } from 'react-native';
+import { Animated, PanResponder, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View, NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator, Share, Platform } from 'react-native';
 import { Appbar, Button, IconButton, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
@@ -14,7 +14,7 @@ import { useChat } from '../src/contexts/ChatContext';
 import { getActiveFeedTopics, refreshForYouFeed, refreshInterestsFeed, fetchNextBatch } from '../src/services/feedService';
 import { reactToTopic, unreactToTopic, saveTopic, unsaveTopic, hideTopic, hideCategory as hideCategoryFunc, getUserTopicReaction, isTopicSaved } from '../src/services/topicEngagement';
 import { analytics } from '../src/services/analytics';
-import * as Sharing from 'expo-sharing';
+import { createShareLink } from '../src/services/shareLinks';
 import { clearProactiveCache, markProactiveTopicAsSent } from '../src/services/proactiveAI';
 import { supabase } from '../src/services/supabase';
 import { ProactiveTopic } from '../src/types';
@@ -528,12 +528,30 @@ export default function DiscoverScreen() {
     if (!user?.id) return;
     
     try {
-      const message = `Check out this interesting topic: ${topic.topic}\n\n${formatTopicMessage(topic.message)}\n\nDiscuss on ProactiveAI`;
-      
-      await Sharing.shareAsync('data:text/plain;base64,' + btoa(message), {
-        dialogTitle: 'Share Topic',
-      });
-      
+      const payload = {
+        itemType: 'topic' as const,
+        itemId: topic.id,
+        userId: user.id,
+        title: topic.topic,
+        description: formatTopicMessage(topic.message),
+        imageUrl: undefined,
+        sourceUrl: topic.source_url || undefined,
+        category: topic.category || undefined,
+        newsContext: topic.source_title ? {
+          title: topic.source_title,
+          description: topic.source_description || undefined,
+          url: topic.source_url || undefined,
+          category: topic.category || undefined,
+          content: topic.source_description || undefined,
+        } : undefined,
+      };
+
+      const link = await createShareLink(payload);
+      const url = link?.url || topic.source_url || '';
+      // Share only the URL to maximize rich preview cards across apps
+      const sharePayload = Platform.select({ ios: { url }, android: { message: url } }) as any;
+      await Share.share(sharePayload);
+
       analytics.trackTopicShared(user.id, topic.id);
     } catch (error) {
       console.error('Error sharing topic:', error);
