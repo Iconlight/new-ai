@@ -11,6 +11,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const APP_SCHEME = Deno.env.get("APP_SCHEME") || "proactiveai";
 const APP_WEB_FALLBACK = Deno.env.get("APP_WEB_FALLBACK") || "https://proactiveai.app"; // optional
+const OG_IMAGE_URL = Deno.env.get("OG_IMAGE_URL") || ""; // optional public HTTPS image for rich previews
 
 // Use service role key to bypass RLS for public share links
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -33,10 +34,11 @@ function pageTemplate({
   image,
   url,
   appUrl,
-}: { title: string; description?: string; image?: string | null; url: string; appUrl: string }) {
+  androidIntentUrl,
+}: { title: string; description?: string; image?: string | null; url: string; appUrl: string; androidIntentUrl?: string }) {
   const safeTitle = htmlEscape(title);
   const safeDesc = htmlEscape(description || "Discuss on ProactiveAI");
-  const safeImage = image || "data:image/svg+xml;base64," + btoa(`
+  const safeImage = image || OG_IMAGE_URL || ("data:image/svg+xml;base64," + btoa(`
     <svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -51,7 +53,7 @@ function pageTemplate({
       <text x="600" y="400" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, sans-serif" font-size="24">AI-Powered Conversations</text>
       <text x="600" y="500" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui, sans-serif" font-size="32" font-weight="600">${title.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 50)}</text>
     </svg>
-  `);
+  `));
 
   // Basic, clean preview. Social platforms read OG/Twitter meta tags from server response.
   return `<!doctype html>
@@ -117,8 +119,19 @@ function pageTemplate({
     </div>
   </div>
   <script>
-    // Auto-redirect to app scheme on capable devices, fallback remains
-    setTimeout(function(){ window.location.href = '${appUrl}'; }, 100);
+    // Try Android intent deep link first (Chrome/Android), then fallback to custom scheme
+    (function(){
+      var isAndroid = /Android/i.test(navigator.userAgent);
+      var appUrl = '${appUrl}';
+      var androidIntent = ${androidIntentUrl ? `'${androidIntentUrl}'` : 'null'};
+      if (isAndroid && androidIntent) {
+        // Chrome on Android supports intent://
+        window.location.href = androidIntent;
+        setTimeout(function(){ window.location.href = appUrl; }, 150);
+      } else {
+        setTimeout(function(){ window.location.href = appUrl; }, 100);
+      }
+    })();
   </script>
 </body>
 </html>`;
@@ -165,8 +178,13 @@ serve(async (req) => {
       });
     }
 
-    const publicUrl = `${urlObj.origin}/share/${slug}`;
+    // Build an HTTPS public URL using proxy headers when available
+    const xfProto = req.headers.get('x-forwarded-proto') || urlObj.protocol.replace(':','');
+    const xfHost = req.headers.get('x-forwarded-host') || urlObj.host;
+    const publicUrl = `${xfProto}://${xfHost}${urlObj.pathname}`;
     const appUrl = `${APP_SCHEME}://share/${slug}?auto=1`;
+    const ANDROID_PACKAGE = Deno.env.get('ANDROID_PACKAGE_NAME') || 'com.proactiveai.app';
+    const androidIntentUrl = `intent://share/${slug}#Intent;scheme=${APP_SCHEME};package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(publicUrl)};end`;
 
     const html = pageTemplate({
       title: data.title || data.news_context?.title || 'ProactiveAI',
@@ -174,6 +192,7 @@ serve(async (req) => {
       image: data.image_url || null,
       url: publicUrl,
       appUrl,
+      androidIntentUrl,
     });
 
     return new Response(html, { 

@@ -12,6 +12,17 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Ensure Android has a default notification channel with high importance
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('default', {
+    name: 'Default',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#8B5CF6',
+  }).catch(() => {});
+}
+
 export const registerForPushNotificationsAsync = async (): Promise<string | null> => {
   // Skip notifications on web platform
   if (Platform.OS === 'web') {

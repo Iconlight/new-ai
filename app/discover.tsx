@@ -418,7 +418,23 @@ export default function DiscoverScreen() {
          .replace(/[^\w\s.,!?'"()-]/g, ' ') // Remove unusual characters
          .replace(/\s+/g, ' ') // Normalize whitespace
          .trim();
-    
+
+    // Strip conversational hook openers that add little value
+    const openerPatterns = [
+      /^low[- ]?key big news:\s*/i,
+      /^okay,? this is wild:\s*/i,
+      /^spotted this making waves:\s*/i,
+      /^tiny detail,? huge implications:\s*/i,
+      /^heads up:\s*/i,
+      /^did you see this\?\s*/i,
+    ];
+    for (const pat of openerPatterns) {
+      if (pat.test(s)) {
+        s = s.replace(pat, '').trim();
+        break;
+      }
+    }
+
     const firstLine = s.split('\n').map(l => l.trim()).find(Boolean);
     return firstLine || 'Tap to start this conversation';
   };

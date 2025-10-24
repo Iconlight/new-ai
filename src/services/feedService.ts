@@ -110,12 +110,11 @@ function dynamicCloser(feedType: FeedType, category?: string, interests?: string
 
 function buildStarter(opts: { feedType: FeedType; title: string; description?: string; category?: string; interests?: string[] }): string {
   const { feedType, title, description, category, interests } = opts;
-  const opener = hookOpeners(category);
   const desc = summarize(description, 160);
   const closer = dynamicCloser(feedType, category, interests);
   const middle = desc ? `“${title}” — ${desc}` : `“${title}”`;
-  // Keep tone informal but informative
-  return `${opener} ${middle} ${closer}`.trim();
+  // Start directly with the content; keep a concise closer for engagement
+  return `${middle} ${closer}`.trim();
 }
 
 // Ensure we operate as the authenticated user to satisfy RLS

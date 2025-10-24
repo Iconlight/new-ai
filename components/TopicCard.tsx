@@ -85,21 +85,6 @@ export default function TopicCard({
             style={styles.actionIcon}
           />
         </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={(e) => {
-            e.stopPropagation();
-            onShare();
-          }}
-          style={styles.actionButton}
-        >
-          <IconButton
-            icon="share-variant-outline"
-            size={20}
-            iconColor="rgba(255,255,255,0.7)"
-            style={styles.actionIcon}
-          />
-        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
