@@ -343,6 +343,42 @@ function NetworkingScreenContent() {
     );
   };
 
+  const handleMarkAllAsRead = async () => {
+    if (!user) return;
+
+    try {
+      // Get all conversation IDs for connected matches
+      const conversationIds = connectedMatches
+        .map(m => m.conversationId)
+        .filter(Boolean) as string[];
+
+      if (conversationIds.length === 0) {
+        Alert.alert('No conversations', 'You don\'t have any active conversations yet.');
+        return;
+      }
+
+      // Mark all messages as read for these conversations
+      const { error } = await supabase
+        .from('networking_messages')
+        .update({ is_read: true })
+        .in('conversation_id', conversationIds)
+        .neq('sender_id', user.id)
+        .eq('is_read', false);
+
+      if (error) {
+        console.error('[Networking] Error marking all as read:', error);
+        Alert.alert('Error', 'Failed to mark all messages as read. Please try again.');
+      } else {
+        // Optimistically clear all unread counts
+        setUnreadCounts({});
+        Alert.alert('Success', 'All messages marked as read');
+      }
+    } catch (error) {
+      console.error('[Networking] Error in handleMarkAllAsRead:', error);
+      Alert.alert('Error', 'An unexpected error occurred.');
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return theme.colors.primary;
@@ -657,31 +693,57 @@ function NetworkingScreenContent() {
 
         {/* Floating Tab Buttons */}
         <View style={styles.floatingTabContainer}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setActiveTab('discover')}
-            style={styles.floatingTab}
-          >
-            <Text style={[styles.floatingTabText, activeTab === 'discover' && styles.floatingTabTextActive]}>
-              Discover
-            </Text>
-            {activeTab === 'discover' && (
-              <View style={styles.tabIndicator} />
-            )}
-          </TouchableOpacity>
+          <View style={styles.tabsRow}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setActiveTab('discover')}
+              style={styles.floatingTab}
+            >
+              <Text style={[styles.floatingTabText, activeTab === 'discover' && styles.floatingTabTextActive]}>
+                Discover
+              </Text>
+              {activeTab === 'discover' && (
+                <View style={styles.tabIndicator} />
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setActiveTab('connected')}
+              style={styles.floatingTab}
+            >
+              <Text style={[styles.floatingTabText, activeTab === 'connected' && styles.floatingTabTextActive]}>
+                Connected
+              </Text>
+              {activeTab === 'connected' && (
+                <View style={styles.tabIndicator} />
+              )}
+            </TouchableOpacity>
+          </View>
           
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setActiveTab('connected')}
-            style={styles.floatingTab}
-          >
-            <Text style={[styles.floatingTabText, activeTab === 'connected' && styles.floatingTabTextActive]}>
-              Connected
-            </Text>
-            {activeTab === 'connected' && (
-              <View style={styles.tabIndicator} />
-            )}
-          </TouchableOpacity>
+          {activeTab === 'connected' && connectedMatches.length > 0 && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleMarkAllAsRead}
+              style={[
+                styles.markAllReadButton,
+                !Object.values(unreadCounts).some(c => c > 0) && styles.markAllReadButtonDisabled
+              ]}
+              disabled={!Object.values(unreadCounts).some(c => c > 0)}
+            >
+              <Ionicons 
+                name="checkmark-done" 
+                size={16} 
+                color={Object.values(unreadCounts).some(c => c > 0) ? "#C084FC" : "rgba(192, 132, 252, 0.4)"} 
+              />
+              <Text style={[
+                styles.markAllReadText,
+                !Object.values(unreadCounts).some(c => c > 0) && styles.markAllReadTextDisabled
+              ]}>
+                Mark all read
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView
@@ -788,10 +850,15 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   floatingTabContainer: {
-    flexDirection: 'row',
-    gap: 32,
+    flexDirection: 'column',
     paddingHorizontal: 16,
     paddingVertical: 16,
+    alignItems: 'center',
+    gap: 12,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    gap: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -800,6 +867,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 4,
+  },
+  markAllReadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(192, 132, 252, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(192, 132, 252, 0.3)',
+  },
+  markAllReadButtonDisabled: {
+    backgroundColor: 'rgba(192, 132, 252, 0.05)',
+    borderColor: 'rgba(192, 132, 252, 0.15)',
+    opacity: 0.6,
+  },
+  markAllReadText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#C084FC',
+  },
+  markAllReadTextDisabled: {
+    color: 'rgba(192, 132, 252, 0.4)',
   },
   floatingTabText: {
     fontSize: 17,
