@@ -60,7 +60,10 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
   return token;
 };
 
-export const scheduleDailyNotifications = async (conversationStarters: string[]) => {
+export const scheduleDailyNotifications = async (
+  conversationStarters: string[],
+  count: number = 3
+) => {
   // Skip notifications on web platform
   if (Platform.OS === 'web') {
     console.log('Notification scheduling not supported on web platform');
@@ -68,64 +71,41 @@ export const scheduleDailyNotifications = async (conversationStarters: string[])
   }
 
   try {
-    // Cancel existing notifications
+    // Cancel all previously scheduled local notifications to avoid duplicates
     await Notifications.cancelAllScheduledNotificationsAsync();
 
-    // Schedule 4 notifications per day as requested
-    const now = new Date();
-    const times = [
-      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0),  // 9 AM
-      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 0), // 1 PM
-      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0), // 5 PM
-      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0), // 8 PM
-    ];
-
+    // Define 3 daily times by default
+    const hours = [9, 13, 18]; // 9 AM, 1 PM, 6 PM
     const titles = [
       'Good Morning! 🌅',
       'Afternoon Thoughts 🤔',
       'Evening Reflection 🌆',
-      'Night Chat 🌙'
     ];
 
-    for (let i = 0; i < Math.min(conversationStarters.length, 4); i++) {
-      const scheduledTime = times[i];
-      
-      // Only schedule if the time hasn't passed today
-      if (scheduledTime > now) {
-        const secondsFromNow = Math.floor((scheduledTime.getTime() - now.getTime()) / 1000);
-        
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: titles[i] || 'Let\'s Chat! 💬',
-            body: conversationStarters[i],
-            data: { 
-              conversationStarter: conversationStarters[i],
-              notificationTime: scheduledTime.toISOString(),
-              index: i
-            },
-            sound: 'default',
-            ...(Platform.OS === 'android' && {
-              android: {
-                icon: './assets/images/notification-icon.png',
-                color: '#8B5CF6',
-              },
-            }),
+    const total = Math.min(conversationStarters.length, Math.max(1, count), hours.length);
+
+    for (let i = 0; i < total; i++) {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: titles[i] || 'Let\'s Chat! 💬',
+          body: conversationStarters[i],
+          data: {
+            type: 'daily_news',
+            conversationStarter: conversationStarters[i],
+            index: i,
           },
-          trigger: {
-            type: 'timeInterval',
-            seconds: secondsFromNow,
-          } as any,
-        });
-        
-        console.log(`Scheduled notification ${i + 1} for ${scheduledTime.toLocaleTimeString()}`);
-      } else {
-        console.log(`Skipping notification ${i + 1} - time has passed (${scheduledTime.toLocaleTimeString()})`);
-      }
-    }
-    
-    // Schedule notifications for tomorrow if we have more starters
-    if (conversationStarters.length > 4) {
-      await scheduleNextDayNotifications(conversationStarters.slice(4));
+          sound: 'default',
+        },
+        // Calendar-based daily repeating trigger at specific hour/minute
+        trigger: {
+          hour: hours[i],
+          minute: 0,
+          repeats: true,
+          channelId: 'default',
+        } as any,
+      });
+
+      console.log(`Scheduled repeating daily notification ${i + 1} at ${hours[i]}:00`);
     }
   } catch (error) {
     console.error('Error scheduling notifications:', error);

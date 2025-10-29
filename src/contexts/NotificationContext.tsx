@@ -137,22 +137,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .single();
 
       if (preferences?.notification_enabled !== false) { // Default to enabled
-        // Check if we already have notifications scheduled for today
+        // Check if we already have repeating daily news notifications scheduled
         const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-        const today = new Date().toDateString();
-        
-        const hasNotificationsForToday = scheduledNotifications.some((notification: any) => {
-          const triggerValue = notification.trigger?.value || notification.trigger?.seconds;
-          if (!triggerValue) return false;
-          const notificationDate = new Date(Date.now() + (triggerValue * 1000)).toDateString();
-          return notificationDate === today;
+
+        const dailyNews = scheduledNotifications.filter((n: any) => {
+          const isDaily = n?.content?.data?.type === 'daily_news';
+          const repeats = n?.trigger?.repeats === true || typeof n?.trigger?.hour === 'number';
+          return isDaily && repeats;
         });
 
-        if (!hasNotificationsForToday) {
-          console.log('No notifications scheduled for today, generating new ones...');
+        if (dailyNews.length < 3) {
+          console.log(`Scheduling daily news notifications (have ${dailyNews.length}, need 3)...`);
           await generateDailyConversations();
         } else {
-          console.log(`Already have ${scheduledNotifications.length} notifications scheduled`);
+          console.log('Daily news notifications already scheduled:', dailyNews.length);
         }
       }
     } catch (error) {
@@ -183,7 +181,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Combine and format topics for notifications
       const allTopics = [...interestsTopics, ...forYouTopics];
       const conversationStarters = allTopics
-        .slice(0, 4) // Get 4 topics for daily notifications
+        .slice(0, 3) // Get 3 topics for daily notifications
         .map(topic => {
           // Format the topic message for notifications
           let message = topic.message;
@@ -207,8 +205,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
       
       if (conversationStarters.length > 0) {
-        await scheduleDailyNotifications(conversationStarters);
-        console.log(`Scheduled ${conversationStarters.length} daily notifications`);
+        await scheduleDailyNotifications(conversationStarters, 3);
+        console.log(`Scheduled ${conversationStarters.length} daily notifications (repeating)`);
       }
     } catch (error) {
       console.error('Error generating daily conversations:', error);
