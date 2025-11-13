@@ -23,9 +23,9 @@ export default function IndexScreen() {
           router.replace('/discover');
         }
       } else {
-        console.log('[Index] No session, redirecting to auth');
+        console.log('[Index] No session, redirecting to welcome');
         hasRedirected.current = true;
-        router.replace('/(auth)');
+        router.replace('/welcome');
       }
     }
   }, [session, loading, needsOnboarding]);

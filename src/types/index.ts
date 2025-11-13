@@ -60,6 +60,7 @@ export interface ProactiveTopic {
   sent_at?: string;
   source_url?: string;
   source_title?: string;
+  source_description?: string;
   source_type?: string;
   category?: string;
 }

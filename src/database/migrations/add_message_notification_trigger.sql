@@ -18,10 +18,22 @@ CREATE TABLE IF NOT EXISTS edge_function_config (
 -- Enable RLS on the config table (only service role can access)
 ALTER TABLE edge_function_config ENABLE ROW LEVEL SECURITY;
 
--- Create policy: Only service role can read/write
-CREATE POLICY "Service role only" ON edge_function_config
-  FOR ALL
-  USING (auth.role() = 'service_role');
+-- Create policy: Only service role can read/write (idempotent)
+CREATE EXTENSION IF NOT EXISTS pg_net;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'edge_function_config'
+      AND policyname = 'Service role only'
+  ) THEN
+    CREATE POLICY "Service role only" ON edge_function_config
+      FOR ALL
+      USING (auth.role() = 'service_role');
+  END IF;
+END
+$$;
 
 -- Insert the configuration (you'll need to update this with your actual values)
 -- Run this separately after the migration with your actual project ref and service role key:
@@ -35,6 +47,17 @@ CREATE POLICY "Service role only" ON edge_function_config
 -- SET function_url = EXCLUDED.function_url,
 --     service_role_key = EXCLUDED.service_role_key,
 --     updated_at = NOW();
+
+INSERT INTO edge_function_config (function_name, function_url, service_role_key)
+VALUES (
+  'send-message-notification',
+  'https://xqwnwuydzkrxwxxsraxm.supabase.co/functions/v1/send-message-notification',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxd253dXlkemtyeHd4eHNyYXhtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzkxNDI3NCwiZXhwIjoyMDczNDkwMjc0fQ.fi_szerYqcdolz70eYvzEtt0Ft2nbQIbXBfFY6OQyd4'
+)
+ON CONFLICT (function_name) DO UPDATE
+SET function_url = EXCLUDED.function_url,
+    service_role_key = EXCLUDED.service_role_key,
+    updated_at = NOW();
 
 -- Create a function that calls the Edge Function via pg_net (Supabase's HTTP extension)
 CREATE OR REPLACE FUNCTION notify_new_networking_message()

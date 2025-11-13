@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Animated, BackHandler, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Bubble, GiftedChat, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
 import { Appbar, useTheme } from 'react-native-paper';
 import AnimatedLoading from '../../../components/ui/AnimatedLoading';
@@ -64,19 +64,22 @@ export default function ChatScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.gradientBg}
     >
-      <View style={styles.glassHeaderCard}>
-        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
-        <Appbar.Header style={styles.glassHeaderInner}>
-          <Appbar.BackAction color="#ffffff" onPress={() => {
+      {/* Floating Header */}
+      <View style={styles.floatingHeader}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => {
             // Always navigate to discover page instead of using router.back()
             // This ensures consistent navigation behavior
             router.push('/discover');
-          }} />
-          <Appbar.Content 
-            title={currentChat?.title || 'Chat'} 
-            titleStyle={{ color: '#ffffff' }}
-          />
-        </Appbar.Header>
+          }}
+          style={styles.headerButton}
+        >
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitleText}>{currentChat?.title || 'Chat'}</Text>
+        <View style={{ width: 44 }} />
       </View>
 
       <KeyboardAvoidingView 
@@ -106,8 +109,8 @@ export default function ChatScreen() {
           renderAvatar={renderAvatar}
           placeholder="Type a message..."
           alwaysShowSend
-          minComposerHeight={36}
-          maxComposerHeight={90}
+          minComposerHeight={44}
+          maxComposerHeight={100}
           listViewProps={{
             keyboardShouldPersistTaps: 'always',
           }}
@@ -122,19 +125,19 @@ export default function ChatScreen() {
             </View>
           )}
           renderSend={(props) => (
-            <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
+            <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 }}>
               <View
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   backgroundColor: 'rgba(255,255,255,0.15)',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  marginRight: 6,
+                  marginRight: 8,
                 }}
               >
-                <Ionicons name="send" size={20} color="#FFFFFF" />
+                <Ionicons name="send" size={22} color="#FFFFFF" />
               </View>
             </Send>
           )}
@@ -144,9 +147,9 @@ export default function ChatScreen() {
               flex: 1,
               backgroundColor: 'transparent',
               color: '#ffffff',
-              paddingHorizontal: 12,
-              paddingTop: 8,
-              paddingBottom: 8,
+              paddingHorizontal: 14,
+              paddingTop: 10,
+              paddingBottom: 10,
               marginHorizontal: 0,
               borderWidth: 0,
             },
@@ -221,21 +224,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 0,
   },
-  glassHeaderCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 8,
-    overflow: 'hidden',
+  floatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 52,
   },
-  glassHeaderInner: {
-    backgroundColor: 'transparent',
-    elevation: 0,
-    shadowOpacity: 0,
-    borderBottomWidth: 0,
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitleText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   orbA: {
     position: 'absolute',
@@ -277,7 +296,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputToolbarWrapper: {
-    marginHorizontal: 0,
+    marginHorizontal: 12,
     marginBottom: 8,
     borderRadius: 24,
     overflow: 'hidden',

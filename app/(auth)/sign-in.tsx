@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Text, TextInput, Surface } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SignIn() {
   const { signIn, signInWithGoogle } = useAuth();
@@ -126,6 +127,9 @@ export default function SignIn() {
           disabled={loading}
           style={[styles.button, styles.outlinedButton]}
           textColor="#FFFFFF"
+          icon={() => (
+            <Ionicons name="logo-google" size={20} color="#FFFFFF" />
+          )}
         >
           Continue with Google
         </Button>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { generateAIResponse, generateChatTitle } from '../services/ai';
+import { fetchArticleContent } from '../services/articleFetcher';
 import { useAuth } from './AuthContext';
 import { Chat, Message, GiftedChatMessage } from '../types';
 import * as Crypto from 'expo-crypto';
@@ -15,7 +16,7 @@ interface ChatContextType {
   sendMessage: (text: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
   refreshChats: () => Promise<void>;
-  startChatWithAI: (initialMessage: string, suggestedTitle?: string, newsContext?: { title: string; description?: string; url?: string; category?: string }) => Promise<Chat | null>;
+  startChatWithAI: (initialMessage: string, suggestedTitle?: string, newsContext?: { title: string; description?: string; url?: string; category?: string; content?: string }) => Promise<Chat | null>;
   isTyping: boolean;
 }
 
@@ -71,17 +72,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const startChatWithAI = async (initialMessage: string, suggestedTitle?: string, newsContext?: { title: string; description?: string; url?: string; category?: string }): Promise<Chat | null> => {
+  const startChatWithAI = async (initialMessage: string, suggestedTitle?: string, newsContext?: { title: string; description?: string; url?: string; category?: string; content?: string }): Promise<Chat | null> => {
     if (!user) return null;
     try {
       const chatTitle = suggestedTitle || 'New Conversation';
+
+      // Fetch full article content if we have a URL
+      let enrichedNewsContext = newsContext;
+      if (newsContext?.url) {
+        console.log('[ChatContext] Fetching article content from:', newsContext.url);
+        const articleContent = await fetchArticleContent(newsContext.url);
+        if (articleContent && articleContent.content) {
+          enrichedNewsContext = {
+            ...newsContext,
+            content: articleContent.content,
+            description: articleContent.excerpt || newsContext.description,
+          };
+          console.log('[ChatContext] Article content fetched:', articleContent.content.length, 'characters');
+        } else {
+          console.warn('[ChatContext] Failed to fetch article content, using title only');
+        }
+      }
 
       const { data: newChat, error } = await supabase
         .from('chats')
         .insert({ 
           user_id: user.id, 
           title: chatTitle,
-          news_context: newsContext || null
+          news_context: enrichedNewsContext || null
         })
         .select()
         .single();

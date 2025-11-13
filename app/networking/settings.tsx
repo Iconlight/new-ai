@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Text, Switch, Card, Button, Appbar, useTheme, Chip, SegmentedButtons } from 'react-native-paper';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
+import { Text, Switch, Card, Button, useTheme, Chip, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { updateNetworkingPreferences } from '../../src/services/networking';
@@ -80,10 +82,19 @@ export default function NetworkingSettingsScreen() {
       style={styles.gradientBg}
     >
       <View style={[styles.container, { backgroundColor: 'transparent' }]}>
-        <Appbar.Header style={styles.glassHeader}>
-          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
-          <Appbar.Content title="Networking Settings" titleStyle={{ color: '#ffffff' }} />
-        </Appbar.Header>
+        {/* Floating Header */}
+        <View style={styles.floatingHeader}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.back()}
+            style={styles.headerButton}
+          >
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitleText}>Networking Settings</Text>
+          <View style={{ width: 44 }} />
+        </View>
 
         <ScrollView style={styles.content}>
           <Card style={[styles.card, styles.glassCard]}>
@@ -155,11 +166,13 @@ export default function NetworkingSettingsScreen() {
               <SegmentedButtons
                 value={maxMatchesPerDay.toString()}
                 onValueChange={(value) => setMaxMatchesPerDay(parseInt(value))}
+                density="small"
+                style={styles.segmented}
                 buttons={[
-                  { value: '1', label: '1' },
-                  { value: '3', label: '3' },
-                  { value: '5', label: '5' },
-                  { value: '10', label: '10' },
+                  { value: '1', label: '1', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '3', label: '3', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '5', label: '5', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '10', label: '10', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
                 ]}
               />
             </View>
@@ -177,11 +190,14 @@ export default function NetworkingSettingsScreen() {
               <SegmentedButtons
                 value={minimumCompatibility.toString()}
                 onValueChange={(value) => setMinimumCompatibility(parseInt(value))}
+                density="small"
+                style={styles.segmented}
                 buttons={[
-                  { value: '50', label: '50%' },
-                  { value: '60', label: '60%' },
-                  { value: '70', label: '70%' },
-                  { value: '80', label: '80%' },
+                  { value: '40', label: '40%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '50', label: '50%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '60', label: '60%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '70', label: '70%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
+                  { value: '80', label: '80%', style: styles.segmentedItem, labelStyle: styles.segmentedLabel },
                 ]}
               />
             </View>
@@ -277,10 +293,52 @@ const styles = StyleSheet.create({
   },
   segmentedContainer: {
     marginBottom: 16,
+    width: '100%',
+    paddingHorizontal: 4,
   },
-  glassHeader: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+  segmented: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  segmentedItem: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 4,
+    height: 36,
+  },
+  segmentedLabel: {
+    fontSize: 11,
+  },
+  floatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 52,
+  },
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitleText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
 });

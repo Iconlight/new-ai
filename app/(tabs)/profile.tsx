@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Text, Surface, List, Switch, useTheme } from 'react-native-paper';
@@ -7,6 +7,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useNotification } from '../../src/contexts/NotificationContext';
 import { supabase } from '../../src/services/supabase';
 import { UserInterest, UserPreferences } from '../../src/types';
+import { getPersonalInsights, PersonalInsights } from '../../src/services/userInsights';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -16,10 +17,13 @@ export default function ProfileScreen() {
   const [interests, setInterests] = useState<UserInterest[]>([]);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [loading, setLoading] = useState(false);
+  const [insights, setInsights] = useState<PersonalInsights | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
       loadUserData();
+      loadInsights();
     }
   }, [user]);
 
@@ -78,6 +82,31 @@ export default function ProfileScreen() {
     }
   };
 
+  const loadInsights = async () => {
+    if (!user) return;
+    setInsightsLoading(true);
+    try {
+      const data = await getPersonalInsights(user.id);
+      setInsights(data);
+    } catch (e) {
+      setInsights(null);
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
+
+  const handleShareInsights = async () => {
+    if (!insights) return;
+    const qaTotal = insights.questionCount + insights.answerCount;
+    const ratio = qaTotal > 0 ? Math.round((insights.questionCount / qaTotal) * 100) : 0;
+    const top = insights.topTopics.map(t => `${t.name} (${t.count})`).join(', ');
+    const growth = insights.networkGrowth.map(g => `${g.month}: ${g.count}`).join(' | ');
+    const text = `Your ProactiveAI: ${insights.summary}\nStyle: ${insights.conversationStyle}\nTop topics: ${top || '—'}\nQ/A: ${insights.questionCount}/${insights.answerCount} (${ratio}%)\nCompatible: ${insights.compatibleStyles.join(', ') || '—'}\nNetwork: ${growth || '—'}`;
+    try {
+      await Share.share({ message: text });
+    } catch {}
+  };
+
   const handleSignOut = async () => {
     Alert.alert(
       'Sign Out',
@@ -117,6 +146,58 @@ export default function ProfileScreen() {
             description="Email Address"
             left={(props) => <List.Icon {...props} icon="email" />}
           />
+        </Surface>
+
+        <Surface style={[styles.section, styles.glassCard]} elevation={0}>
+          <Text variant="titleLarge" style={styles.sectionTitle}>
+            Personal Insights
+          </Text>
+          {insightsLoading ? (
+            <Text style={styles.noData}>Loading insights…</Text>
+          ) : insights ? (
+            <>
+              <List.Item
+                title={insights.conversationStyle}
+                description="Your conversation style"
+                left={(props) => <List.Icon {...props} icon="account-tie" />}
+              />
+              <List.Item
+                title={insights.topTopics.length ? insights.topTopics.map(t => `${t.name} (${t.count})`).join(', ') : '—'}
+                description="Topics you engage most with"
+                left={(props) => <List.Icon {...props} icon="tag" />}
+              />
+              <List.Item
+                title={`${insights.questionCount} / ${insights.answerCount}`}
+                description="Your question/answer ratio"
+                left={(props) => <List.Icon {...props} icon="help-circle" />}
+              />
+              <List.Item
+                title={insights.compatibleStyles.join(', ') || '—'}
+                description="Most compatible communication styles"
+                left={(props) => <List.Icon {...props} icon="handshake" />}
+              />
+              <List.Item
+                title={insights.networkGrowth.map(g => `${g.month}: ${g.count}`).join('  |  ') || '—'}
+                description="Network growth over time"
+                left={(props) => <List.Icon {...props} icon="chart-line" />}
+              />
+              <List.Item
+                title={`${insights.meaningfulThisMonth}`}
+                description="Meaningful conversations this month"
+                left={(props) => <List.Icon {...props} icon="message-text" />}
+              />
+              <Button
+                mode="outlined"
+                onPress={handleShareInsights}
+                style={styles.actionButton}
+                icon="share"
+              >
+                Share your 2025 ProactiveAI
+              </Button>
+            </>
+          ) : (
+            <Text style={styles.noData}>No insights yet</Text>
+          )}
         </Surface>
 
         <Surface style={[styles.section, styles.glassCard]} elevation={0}>
@@ -176,7 +257,8 @@ export default function ProfileScreen() {
           <Button
             mode="contained"
             onPress={handleSignOut}
-            style={[styles.actionButton, { backgroundColor: theme.colors.error }]}
+            textColor="#FFFFFF"
+            style={[styles.actionButton, { backgroundColor: '#EF4444' }]}
             icon="logout"
           >
             Sign Out

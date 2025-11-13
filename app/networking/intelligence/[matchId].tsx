@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { GiftedChat, IMessage, Bubble, InputToolbar, Send } from 'react-native-gifted-chat';
-import { Appbar, Text } from 'react-native-paper';
+import { Appbar } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -14,6 +14,7 @@ import {
 import { debugUserContext } from '../../../src/services/debugNetworkingIntelligence';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { supabase } from '../../../src/services/supabase';
+import MarkdownText from '../../../components/ui/MarkdownText';
 
 export default function IntelligenceChatScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
@@ -249,6 +250,21 @@ export default function IntelligenceChatScreen() {
           left: { marginLeft: 0 },
           right: { marginRight: 0 },
         }}
+        renderMessageText={(textProps) => {
+          const isCurrentUser = textProps.currentMessage?.user._id === user?.id;
+          const textColor = isCurrentUser ? '#FFFFFF' : '#FFFFFF';
+          const codeBg = isCurrentUser ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.15)';
+          return (
+            <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
+              <MarkdownText
+                text={textProps.currentMessage?.text || ''}
+                color={textColor}
+                codeBg={codeBg}
+                codeColor={textColor}
+              />
+            </View>
+          );
+        }}
       />
     );
   };
@@ -284,15 +300,18 @@ export default function IntelligenceChatScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.container}
       >
-        <View style={styles.header}>
-          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-          <Appbar.Header style={styles.appbar}>
-            <Appbar.BackAction color="#fff" onPress={() => router.back()} />
-            <Appbar.Content 
-              title="Loading..."
-              titleStyle={{ color: '#fff' }}
-            />
-          </Appbar.Header>
+        {/* Floating Header */}
+        <View style={styles.floatingHeader}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.back()}
+            style={styles.headerButton}
+          >
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitleText}>Loading...</Text>
+          <View style={{ width: 44 }} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#7C3AED" />
@@ -309,28 +328,18 @@ export default function IntelligenceChatScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
-      <View style={styles.header}>
-        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-        <Appbar.Header style={styles.appbar}>
-          <Appbar.BackAction color="#fff" onPress={() => router.back()} />
-          <Appbar.Content 
-            title={`Ask About ${targetUser?.name || 'User'}`}
-            subtitle="AI-powered insights"
-            titleStyle={{ color: '#fff', fontSize: 18 }}
-            subtitleStyle={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}
-          />
-          {/* Debug tools - uncomment if needed */}
-          {/* <Appbar.Action 
-            icon="refresh" 
-            color="#fff" 
-            onPress={handleClearChat}
-          />
-          <Appbar.Action 
-            icon="bug" 
-            color="#fff" 
-            onPress={handleDebug}
-          /> */}
-        </Appbar.Header>
+      {/* Floating Header */}
+      <View style={styles.floatingHeader}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.back()}
+          style={styles.headerButton}
+        >
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitleText}>{`Ask About ${targetUser?.name || 'User'}`}</Text>
+        <View style={{ width: 44 }} />
       </View>
 
       <KeyboardAvoidingView
@@ -367,17 +376,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 8,
-    overflow: 'hidden',
+  floatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 52,
   },
-  appbar: {
-    backgroundColor: 'transparent',
-    elevation: 0,
-    shadowOpacity: 0,
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitleText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   chatContainer: {
     flex: 1,

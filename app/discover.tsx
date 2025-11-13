@@ -3,14 +3,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, PanResponder, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View, NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator } from 'react-native';
+import { Animated, PanResponder, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View, NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator, Share, Platform } from 'react-native';
 import { Appbar, Button, IconButton, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedLoading from '../components/ui/AnimatedLoading';
 import TopicSkeleton from '../components/ui/TopicSkeleton';
+import TopicCard from '../components/TopicCard';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useChat } from '../src/contexts/ChatContext';
 import { getActiveFeedTopics, refreshForYouFeed, refreshInterestsFeed, fetchNextBatch } from '../src/services/feedService';
+import { reactToTopic, unreactToTopic, saveTopic, unsaveTopic, hideTopic, hideCategory as hideCategoryFunc, getUserTopicReaction, isTopicSaved } from '../src/services/topicEngagement';
+import { analytics } from '../src/services/analytics';
+import { createShareLink } from '../src/services/shareLinks';
 import { clearProactiveCache, markProactiveTopicAsSent } from '../src/services/proactiveAI';
 import { supabase } from '../src/services/supabase';
 import { ProactiveTopic } from '../src/types';
@@ -39,6 +43,8 @@ export default function DiscoverScreen() {
   const [interestsPage, setInterestsPage] = useState(0);
   const [shownForYouIds, setShownForYouIds] = useState<Set<string>>(new Set());
   const [shownInterestsIds, setShownInterestsIds] = useState<Set<string>>(new Set());
+  const [likedTopics, setLikedTopics] = useState<Set<string>>(new Set());
+  const [savedTopics, setSavedTopics] = useState<Set<string>>(new Set());
 
   // Helper: only UUIDs correspond to DB-backed proactive_topics
   const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
@@ -196,10 +202,41 @@ export default function DiscoverScreen() {
   ).current;
 
   const loadInitialData = async () => {
+    // Load user's liked and saved topics first
+    await loadUserEngagement();
+    
     if (activeTab === 'interests') {
       await loadTodaysTopics();
     } else {
       await loadForYouTopics();
+    }
+  };
+
+  const loadUserEngagement = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Load liked topics
+      const { data: reactions } = await supabase
+        .from('topic_reactions')
+        .select('topic_id')
+        .eq('user_id', user.id);
+      
+      if (reactions) {
+        setLikedTopics(new Set(reactions.map(r => r.topic_id)));
+      }
+
+      // Load saved topics
+      const { data: saved } = await supabase
+        .from('saved_topics')
+        .select('topic_id')
+        .eq('user_id', user.id);
+      
+      if (saved) {
+        setSavedTopics(new Set(saved.map(s => s.topic_id)));
+      }
+    } catch (error) {
+      console.error('Error loading user engagement:', error);
     }
   };
 
@@ -276,15 +313,19 @@ export default function DiscoverScreen() {
   // Scroll handler for infinite scroll
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 500; // Trigger 500px before bottom
+    const paddingToBottom = 300; // Trigger 300px before bottom
     
-    const isNearBottom = 
-      layoutMeasurement.height + contentOffset.y >= 
-      contentSize.height - paddingToBottom;
+    // Calculate if we're near the bottom
+    const scrollPosition = contentOffset.y + layoutMeasurement.height;
+    const contentHeight = contentSize.height;
+    const isNearBottom = scrollPosition >= contentHeight - paddingToBottom;
     
     const hasMore = activeTab === 'interests' ? hasMoreInterests : hasMoreForYou;
+    const currentTopics = activeTab === 'interests' ? todaysTopics : forYouTopics;
     
-    if (isNearBottom && !loadingMore && !loading && hasMore) {
+    // Only load if: near bottom, not already loading, has content, and has more to load
+    if (isNearBottom && !loadingMore && !loading && hasMore && currentTopics.length > 0) {
+      console.log('📜 Scroll detected near bottom, loading more...');
       loadMoreTopics();
     }
   };
@@ -377,7 +418,23 @@ export default function DiscoverScreen() {
          .replace(/[^\w\s.,!?'"()-]/g, ' ') // Remove unusual characters
          .replace(/\s+/g, ' ') // Normalize whitespace
          .trim();
-    
+
+    // Strip conversational hook openers that add little value
+    const openerPatterns = [
+      /^low[- ]?key big news:\s*/i,
+      /^okay,? this is wild:\s*/i,
+      /^spotted this making waves:\s*/i,
+      /^tiny detail,? huge implications:\s*/i,
+      /^heads up:\s*/i,
+      /^did you see this\?\s*/i,
+    ];
+    for (const pat of openerPatterns) {
+      if (pat.test(s)) {
+        s = s.replace(pat, '').trim();
+        break;
+      }
+    }
+
     const firstLine = s.split('\n').map(l => l.trim()).find(Boolean);
     return firstLine || 'Tap to start this conversation';
   };
@@ -391,6 +448,7 @@ export default function DiscoverScreen() {
       // Extract news context from topic
       const newsContext = topic.source_title ? {
         title: topic.source_title,
+        description: topic.source_description,
         url: topic.source_url,
         category: topic.category,
       } : undefined;
@@ -425,6 +483,119 @@ export default function DiscoverScreen() {
     setTimeout(() => setNavLoading(false), 400);
   };
 
+  // Topic action handlers
+  const handleLikeTopic = async (topic: ProactiveTopic) => {
+    if (!user?.id) return;
+    
+    const isCurrentlyLiked = likedTopics.has(topic.id);
+    
+    // Optimistic update
+    setLikedTopics(prev => {
+      const next = new Set(prev);
+      if (isCurrentlyLiked) {
+        next.delete(topic.id);
+      } else {
+        next.add(topic.id);
+      }
+      return next;
+    });
+
+    // Sync with backend
+    if (isCurrentlyLiked) {
+      await unreactToTopic(user.id, topic.id);
+    } else {
+      await reactToTopic(user.id, topic.id, 'like', topic.category);
+    }
+  };
+
+  const handleSaveTopic = async (topic: ProactiveTopic) => {
+    if (!user?.id) return;
+    
+    const isCurrentlySaved = savedTopics.has(topic.id);
+    
+    // Optimistic update
+    setSavedTopics(prev => {
+      const next = new Set(prev);
+      if (isCurrentlySaved) {
+        next.delete(topic.id);
+      } else {
+        next.add(topic.id);
+      }
+      return next;
+    });
+
+    // Sync with backend
+    if (isCurrentlySaved) {
+      await unsaveTopic(user.id, topic.id);
+    } else {
+      await saveTopic(
+        user.id, 
+        topic.id, 
+        topic.topic, 
+        topic.message, 
+        topic.source_description || '', // Article content from RSS
+        topic.category, 
+        topic.source_url
+      );
+    }
+  };
+
+  const handleShareTopic = async (topic: ProactiveTopic) => {
+    if (!user?.id) return;
+    
+    try {
+      const payload = {
+        itemType: 'topic' as const,
+        itemId: topic.id,
+        userId: user.id,
+        title: topic.topic,
+        description: formatTopicMessage(topic.message),
+        imageUrl: undefined,
+        sourceUrl: topic.source_url || undefined,
+        category: topic.category || undefined,
+        newsContext: topic.source_title ? {
+          title: topic.source_title,
+          description: topic.source_description || undefined,
+          url: topic.source_url || undefined,
+          category: topic.category || undefined,
+          content: topic.source_description || undefined,
+        } : undefined,
+      };
+
+      const link = await createShareLink(payload);
+      const url = link?.url || topic.source_url || '';
+      // Share only the URL to maximize rich preview cards across apps
+      const sharePayload = Platform.select({ ios: { url }, android: { message: url } }) as any;
+      await Share.share(sharePayload);
+
+      analytics.trackTopicShared(user.id, topic.id);
+    } catch (error) {
+      console.error('Error sharing topic:', error);
+    }
+  };
+
+  const handleHideTopic = async (topic: ProactiveTopic, shouldHideCategory?: boolean) => {
+    if (!user?.id) return;
+    
+    if (shouldHideCategory && topic.category) {
+      await hideCategoryFunc(user.id, topic.category);
+      // Remove all topics from this category
+      if (activeTab === 'interests') {
+        setTodaysTopics(prev => prev.filter(t => t.category !== topic.category));
+      } else {
+        setForYouTopics(prev => prev.filter(t => t.category !== topic.category));
+      }
+    } else {
+      await hideTopic(user.id, topic.id, topic.category);
+      // Remove just this topic
+      if (activeTab === 'interests') {
+        setTodaysTopics(prev => prev.filter(t => t.id !== topic.id));
+      } else {
+        setForYouTopics(prev => prev.filter(t => t.id !== topic.id));
+      }
+    }
+  };
+
   const currentTopics = activeTab === 'interests' ? todaysTopics : forYouTopics;
 
   return (
@@ -453,28 +624,42 @@ export default function DiscoverScreen() {
           {/* Title - Floating Text */}
           <Text style={styles.headerTitleText}>ProactiveAI</Text>
 
-          {/* Networking Button - Icon Only */}
-          <View style={{ position: 'relative' }}>
-            <IconButton
-              icon="account-group"
-              iconColor="#ffffff"
-              size={24}
-              onPress={() => router.push('/networking')}
-              style={styles.iconButton}
-            />
-            {unreadNetworkingCount > 0 && (
-              <View style={styles.notificationBadge} />
-            )}
+          {/* Right Button Group: Saved + Networking + Profile */}
+          <View style={styles.headerButtonGroup}>
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={styles.headerGroupIconWrap}>
+              <IconButton
+                icon="bookmark-multiple"
+                iconColor="#ffffff"
+                size={22}
+                onPress={() => router.push('/saved-topics')}
+                style={styles.iconButton}
+              />
+            </View>
+            <View style={styles.headerGroupDivider} />
+            <View style={styles.headerGroupIconWrap}>
+              <IconButton
+                icon="account-group"
+                iconColor="#ffffff"
+                size={22}
+                onPress={() => router.push('/networking')}
+                style={styles.iconButton}
+              />
+              {unreadNetworkingCount > 0 && (
+                <View style={styles.headerGroupBadge} />
+              )}
+            </View>
+            <View style={styles.headerGroupDivider} />
+            <View style={styles.headerGroupIconWrap}>
+              <IconButton
+                icon="account"
+                iconColor="#ffffff"
+                size={22}
+                onPress={() => router.push('/profile')}
+                style={styles.iconButton}
+              />
+            </View>
           </View>
-
-          {/* Profile Button - Icon Only */}
-          <IconButton
-            icon="account"
-            iconColor="#ffffff"
-            size={24}
-            onPress={() => router.push('/profile')}
-            style={styles.iconButton}
-          />
         </View>
 
       {/* Floating Tab Buttons */}
@@ -513,7 +698,7 @@ export default function DiscoverScreen() {
         showsVerticalScrollIndicator={false}
         alwaysBounceVertical={true}
         onScroll={handleScroll}
-        scrollEventThrottle={400}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -538,31 +723,18 @@ export default function DiscoverScreen() {
           ) : currentTopics.length > 0 ? (
             currentTopics.map((topic, idx) => {
               return (
-                <TouchableOpacity
+                <TopicCard
                   key={topic.id}
-                  activeOpacity={0.8}
+                  topic={topic}
                   onPress={() => handleStartTopic(topic)}
+                  onLike={() => handleLikeTopic(topic)}
+                  onSave={() => handleSaveTopic(topic)}
+                  onShare={() => handleShareTopic(topic)}
+                  isLiked={likedTopics.has(topic.id)}
+                  isSaved={savedTopics.has(topic.id)}
                   disabled={startingTopicId === topic.id}
-                  style={styles.topicCard}
-                >
-                  <Text variant="titleSmall" style={styles.cardTitle}>
-                    {topic.topic}
-                  </Text>
-                  <Text variant="bodyMedium" style={styles.cardMessage}>
-                    {formatTopicMessage(topic.message)}
-                  </Text>
-                  <View style={styles.cardMeta}>
-                    <Text variant="bodySmall" style={styles.metaText}>
-                      {new Date(topic.scheduled_for).toLocaleTimeString()}
-                    </Text>
-                    {topic.interests.length > 0 && (
-                      <Text variant="bodySmall" style={styles.metaText}>
-                        {topic.interests.slice(0, 2).join(', ')}
-                        {topic.interests.length > 2 && ` +${topic.interests.length - 2}`}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                  formatMessage={formatTopicMessage}
+                />
               );
             })
           ) : (
@@ -988,6 +1160,52 @@ const styles = StyleSheet.create({
   headerIcon: {
     fontSize: 20,
     color: '#FFFFFF',
+  },
+  headerButtonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerGroupIconWrap: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerGroupDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255,255,255,0.18)'
+  },
+  headerGroupBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: '#160427',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   iconButton: {
     margin: 0,

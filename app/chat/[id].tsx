@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, BackHandler } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, BackHandler, Text, TouchableOpacity } from 'react-native';
 import { GiftedChat, Bubble, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
 import { Appbar, useTheme } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -42,18 +42,24 @@ export default function ChatScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.gradientBg}
       >
-        <View style={styles.glassHeaderCard}>
-          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-          <Appbar.Header style={styles.glassHeaderInner}>
-            <Appbar.BackAction color="#ffffff" onPress={() => {
+        {/* Floating Header */}
+        <View style={styles.floatingHeader}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
               if (router.canGoBack()) {
                 router.back();
               } else {
                 router.replace('/discover');
               }
-            }} />
-            <Appbar.Content title="Loading..." titleStyle={{ color: '#ffffff' }} />
-          </Appbar.Header>
+            }}
+            style={styles.headerButton}
+          >
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitleText}>Loading...</Text>
+          <View style={{ width: 44 }} />
         </View>
       </LinearGradient>
     );
@@ -66,18 +72,22 @@ export default function ChatScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.gradientBg}
     >
-      <View style={styles.glassHeaderCard}> 
-        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
-        <Appbar.Header style={styles.glassHeaderInner}>
-          <Appbar.BackAction color="#ffffff" onPress={() => {
+      {/* Floating Header */}
+      <View style={styles.floatingHeader}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => {
             if (router.canGoBack()) {
               router.back();
-            } else {
-              router.replace('/discover');
             }
-          }} />
-          <Appbar.Content title={currentChat?.title || 'Chat'} titleStyle={{ color: '#ffffff' }} />
-        </Appbar.Header>
+          }}
+          style={styles.headerButton}
+        >
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitleText}>{currentChat?.title || 'Chat'}</Text>
+        <View style={{ width: 44 }} />
       </View>
 
       <KeyboardAvoidingView 
@@ -204,23 +214,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 0,
   },
-  glassHeaderCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 8,
-    overflow: 'hidden',
+  floatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 52,
   },
-  glassHeaderInner: {
-    backgroundColor: 'transparent',
-    elevation: 0,
-    shadowOpacity: 0,
-    borderBottomWidth: 0,
-    height: 56,
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitleText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   orbA: {
     position: 'absolute',

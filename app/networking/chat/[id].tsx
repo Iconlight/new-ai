@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Bubble, GiftedChat, IMessage, InputToolbar, Send, Message } from 'react-native-gifted-chat';
 import * as Notifications from 'expo-notifications';
 import { Appbar, useTheme } from 'react-native-paper';
@@ -346,12 +346,18 @@ export default function NetworkingChatScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.gradientBg}
     >
-      <View style={styles.glassHeaderCard}>
-        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
-        <Appbar.Header style={styles.glassHeaderInner}>
-          <Appbar.BackAction color="#ffffff" onPress={() => router.back()} />
-          <Appbar.Content title={otherUserName || 'Networking Chat'} titleStyle={{ color: '#ffffff' }} />
-        </Appbar.Header>
+      {/* Floating Header */}
+      <View style={styles.floatingHeader}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.back()}
+          style={styles.headerButton}
+        >
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitleText}>{otherUserName || 'Networking Chat'}</Text>
+        <View style={{ width: 44 }} />
       </View>
 
       <KeyboardAvoidingView 
@@ -465,15 +471,15 @@ export default function NetworkingChatScreen() {
               flex: 1,
               backgroundColor: 'transparent',
               color: '#ffffff',
-              paddingHorizontal: 12,
-              paddingTop: 8,
-              paddingBottom: 8,
+              paddingHorizontal: 14,
+              paddingTop: 10,
+              paddingBottom: 10,
               marginHorizontal: 0,
               borderWidth: 0,
             },
           }}
-          minComposerHeight={36}
-          maxComposerHeight={90}
+          minComposerHeight={44}
+          maxComposerHeight={100}
           listViewProps={{ 
             keyboardShouldPersistTaps: 'always',
             scrollEnabled: true,
@@ -493,7 +499,7 @@ export default function NetworkingChatScreen() {
             </View>
           )}
           renderSend={(props) => (
-            <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
+            <Send {...props} containerStyle={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 }}>
               <View
                 style={{
                   width: 40,
@@ -502,10 +508,10 @@ export default function NetworkingChatScreen() {
                   backgroundColor: 'rgba(255,255,255,0.15)',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  marginRight: 6,
+                  marginRight: 8,
                 }}
               >
-                <Ionicons name="send" size={20} color="#FFFFFF" />
+                <Ionicons name="send" size={22} color="#FFFFFF" />
               </View>
             </Send>
           )}
@@ -551,21 +557,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 0,
   },
-  glassHeaderCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 8,
-    overflow: 'hidden',
+  floatingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 52,
   },
-  glassHeaderInner: {
-    backgroundColor: 'transparent',
-    elevation: 0,
-    shadowOpacity: 0,
-    borderBottomWidth: 0,
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitleText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   orbA: {
     position: 'absolute',
@@ -592,7 +614,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   inputToolbarWrapper: {
-    marginHorizontal: 0,
+    marginHorizontal: 12,
     marginBottom: 8,
     borderRadius: 16,
     overflow: 'hidden',

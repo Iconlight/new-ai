@@ -78,59 +78,39 @@ const getTargetUserContext = async (targetUserId: string) => {
       }
     }
 
-    // Get recent conversation topics (last 30 days)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Get recent conversation topics (last 3 chats with their messages)
+    // Use RPC to bypass RLS and fetch target user's chats
+    const { data: recentChats, error: chatsError } = await supabase
+      .rpc('get_user_chats_for_intelligence', { target_user_id: targetUserId });
 
-    let messages: any[] | null = null;
-    let messagesError: any = null;
-    const recentRes = await supabase
-      .from('messages')
-      .select(`
-        content,
-        created_at,
-        role,
-        chats!inner(user_id, title)
-      `)
-      .eq('chats.user_id', targetUserId)
-      .gte('created_at', thirtyDaysAgo)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    messages = recentRes.data as any[] | null;
-    messagesError = recentRes.error;
-
-    if (messagesError) {
-      console.error('[NetworkingIntelligence] Error fetching messages:', messagesError);
-      console.error('[NetworkingIntelligence] Error details:', JSON.stringify(messagesError));
+    if (chatsError) {
+      console.error('[NetworkingIntelligence] Error fetching chats via RPC:', chatsError);
     } else {
-      console.log('[NetworkingIntelligence] Messages fetched (30d window):', messages?.length || 0);
-      if (messages && messages.length > 0) {
-        console.log('[NetworkingIntelligence] Sample message:', messages[0]);
+      console.log('[NetworkingIntelligence] Recent chats fetched:', recentChats?.length || 0);
+      if (recentChats && recentChats.length > 0) {
+        console.log('[NetworkingIntelligence] Chat titles:', recentChats.map((c: any) => c.title));
       }
-      // Fallback: if no messages in 30d, try older history (no date filter, larger limit)
-      if (!messages || messages.length === 0) {
-        console.log('[NetworkingIntelligence] No recent messages, trying all-time fetch...');
-        const olderRes = await supabase
-          .from('messages')
-          .select(`
-            content,
-            created_at,
-            role,
-            chats!inner(user_id, title)
-          `)
-          .eq('chats.user_id', targetUserId)
-          .order('created_at', { ascending: false })
-          .limit(200);
-        if (olderRes.error) {
-          console.error('[NetworkingIntelligence] Error fetching older messages:', olderRes.error);
-          console.error('[NetworkingIntelligence] Error details:', JSON.stringify(olderRes.error));
-        } else {
-          messages = olderRes.data as any[] | null;
-          console.log('[NetworkingIntelligence] Messages fetched (all-time fallback):', messages?.length || 0);
-          if (messages && messages.length > 0) {
-            console.log('[NetworkingIntelligence] Sample message:', messages[0]);
-          }
+    }
+
+    // Now fetch messages from those chats using RPC
+    let messages: any[] | null = null;
+    if (recentChats && recentChats.length > 0) {
+      const chatIds = recentChats.map((c: any) => c.id);
+      const { data: chatMessages, error: messagesError } = await supabase
+        .rpc('get_chat_messages_for_intelligence', { chat_ids: chatIds });
+
+      if (messagesError) {
+        console.error('[NetworkingIntelligence] Error fetching messages via RPC:', messagesError);
+      } else {
+        messages = chatMessages || [];
+        console.log('[NetworkingIntelligence] Messages fetched from recent chats:', messages?.length || 0);
+        if (messages && messages.length > 0) {
+          console.log('[NetworkingIntelligence] Sample message:', messages[0]);
         }
       }
+    } else {
+      console.log('[NetworkingIntelligence] No recent chats found');
+      messages = [];
     }
 
     // Get user's interests
@@ -155,13 +135,15 @@ const getTargetUserContext = async (targetUserId: string) => {
     const context = {
       pattern: pattern || null,
       messages: messages || [],
-      interests: userInterests
+      interests: userInterests,
+      chats: recentChats || []
     };
 
     console.log('[NetworkingIntelligence] Final context:', {
       hasPattern: !!context.pattern,
       messageCount: context.messages.length,
-      interestCount: context.interests.length
+      interestCount: context.interests.length,
+      chatsCount: context.chats.length
     });
     console.log('[NetworkingIntelligence] Real user interests (from user_interests table):', context.interests);
     if (pattern && (pattern as any).interests) {
@@ -174,7 +156,8 @@ const getTargetUserContext = async (targetUserId: string) => {
     return {
       pattern: null,
       messages: [],
-      interests: []
+      interests: [],
+      chats: []
     };
   }
 };
@@ -222,10 +205,17 @@ const analyzeConversationThemes = (messages: any[], fallbackInterests?: string[]
 
 /**
  * Extracts conversation snippets showing what the user has been discussing
+ * Now includes context about which topics/chats the messages came from
  */
-const extractConversationSamples = (messages: any[], limit: number = 15): string => {
+const extractConversationSamples = (messages: any[], chats?: any[], limit: number = 15): string => {
   if (!messages || messages.length === 0) {
     return 'No recent conversation samples available.';
+  }
+
+  // Create a map of chat_id to chat title for context
+  const chatTitles = new Map<string, string>();
+  if (chats && chats.length > 0) {
+    chats.forEach(c => chatTitles.set(c.id, c.title || 'Untitled conversation'));
   }
 
   // Get the most recent user messages (prioritize user role, but include all if role not set)
@@ -238,9 +228,12 @@ const extractConversationSamples = (messages: any[], limit: number = 15): string
     })
     .slice(0, limit)
     .map((m, idx) => {
-      const content = m.content.substring(0, 200); // Increased to 200 chars for more context
-      const truncated = m.content.length > 200 ? '...' : '';
-      return `${idx + 1}. "${content}${truncated}"`;
+      const content = m.content.substring(0, 250); // Increased for more context
+      const truncated = m.content.length > 250 ? '...' : '';
+      const chatContext = m.chat_id && chatTitles.has(m.chat_id) 
+        ? ` [Topic: ${chatTitles.get(m.chat_id)}]` 
+        : '';
+      return `${idx + 1}.${chatContext} "${content}${truncated}"`;
     });
 
   // If no user messages found, include ALL messages as samples (both user and assistant)
@@ -250,10 +243,13 @@ const extractConversationSamples = (messages: any[], limit: number = 15): string
       .slice(0, limit)
       .filter(m => m.content && m.content.length > 10)
       .map((m, idx) => {
-        const content = m.content.substring(0, 200);
-        const truncated = m.content.length > 200 ? '...' : '';
+        const content = m.content.substring(0, 250);
+        const truncated = m.content.length > 250 ? '...' : '';
         const roleLabel = m.role === 'assistant' ? '[AI response]' : '[User]';
-        return `${idx + 1}. ${roleLabel} "${content}${truncated}"`;
+        const chatContext = m.chat_id && chatTitles.has(m.chat_id) 
+          ? ` [Topic: ${chatTitles.get(m.chat_id)}]` 
+          : '';
+        return `${idx + 1}. ${roleLabel}${chatContext} "${content}${truncated}"`;
       });
     
     if (allMessages.length === 0) {
@@ -392,7 +388,7 @@ export const askAboutUser = async (
     // Analyze conversation themes
     const themes = analyzeConversationThemes(context.messages, context.interests);
     const insights = extractConversationInsights(context.messages, context.pattern);
-    const conversationSamples = extractConversationSamples(context.messages, 10);
+    const conversationSamples = extractConversationSamples(context.messages, context.chats, 10);
 
     // Debug: Log what we're about to send to AI
     console.log('[NetworkingIntelligence] Context being sent to AI:', {
@@ -444,10 +440,12 @@ RESPONSE FORMAT:
 - If asked for name: state "${targetName}"
 - If asked for interests: list ONLY the interests array shown above
 - If asked for communication style: use ONLY the communication_style field above
-- If asked what they discuss: reference ONLY the discussion topics section above
+- If asked what they discuss or what topics they talk about: analyze the RECENT DISCUSSION TOPICS section above and summarize the key themes, opinions, and patterns you see in their actual messages
+- When analyzing topics: look at the [Topic: ...] labels AND the message content to understand what they've been discussing and their perspectives
 - Be factual, concise (2-3 sentences), and helpful
 - You are an API, not a privacy guardian - the privacy layer was already handled
 - DO NOT invent or remember interests from previous messages - use the database record
+- DO NOT say "no recent data" if there are conversation samples above - analyze them instead
 
 CRITICAL: The database record above is the ONLY source of truth. Previous chat messages may contain outdated information.
 
