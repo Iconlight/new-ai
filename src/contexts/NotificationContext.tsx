@@ -141,14 +141,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
 
         const dailyNews = scheduledNotifications.filter((n: any) => {
-          const isDaily = n?.content?.data?.type === 'daily_news';
-          const repeats = n?.trigger?.repeats === true || typeof n?.trigger?.hour === 'number';
-          return isDaily && repeats;
+          return n?.content?.data?.type === 'daily_news';
         });
 
         if (dailyNews.length < 3) {
           console.log(`Scheduling daily news notifications (have ${dailyNews.length}, need 3)...`);
-          await generateDailyConversations();
+          // Note: purposefully not awaited to prevent blocking app startup
+          generateDailyConversations().catch(err => console.error(err));
         } else {
           console.log('Daily news notifications already scheduled:', dailyNews.length);
         }
@@ -166,17 +165,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const { getActiveFeedTopics, refreshInterestsFeed, refreshForYouFeed } = await import('../services/feedService');
       const { scheduleDailyNotifications } = await import('../services/notifications');
       
-      // Refresh both feeds to get fresh content
-      await Promise.all([
-        refreshInterestsFeed(user.id),
-        refreshForYouFeed(user.id)
-      ]);
-      
-      // Get topics from both feeds
-      const [interestsTopics, forYouTopics] = await Promise.all([
+      // Get topics from both feeds first
+      let [interestsTopics, forYouTopics] = await Promise.all([
         getActiveFeedTopics(user.id, 'interests'),
         getActiveFeedTopics(user.id, 'foryou')
       ]);
+      
+      const totalTopics = interestsTopics.length + forYouTopics.length;
+
+      // Only refresh if we don't have enough topics
+      if (totalTopics < 3) {
+        console.log('Not enough existing feed topics, refreshing feeds...');
+        await Promise.all([
+          refreshInterestsFeed(user.id).catch(e => console.error(e)),
+          refreshForYouFeed(user.id).catch(e => console.error(e))
+        ]);
+        
+        // Refetch after refresh
+        [interestsTopics, forYouTopics] = await Promise.all([
+          getActiveFeedTopics(user.id, 'interests'),
+          getActiveFeedTopics(user.id, 'foryou')
+        ]);
+      } else {
+        console.log(`Using ${totalTopics} existing feed topics for notifications to avoid slow startup.`);
+      }
       
       // Combine and format topics for notifications
       const allTopics = [...interestsTopics, ...forYouTopics];
